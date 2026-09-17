@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Hilo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+  input, button { font-size: 16px; padding: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
+  .row { display: flex; gap: 8px; }
+  .row > button { flex: 1; }
+  #card { font-size: 48px; text-align: center; margin: 16px 0; }
+  #log { font-size: 13px; color: #555; white-space: pre-wrap; }
+  section { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<section id="authBox">
+  <h3>로그인 / 회원가입</h3>
+  <input id="username" placeholder="아이디" />
+  <input id="password" type="password" placeholder="비밀번호 (6자 이상)" />
+  <div class="row">
+    <button onclick="register()">회원가입</button>
+    <button onclick="login()">로그인</button>
+  </div>
+</section>
+
+<section id="gameBox" style="display:none;">
+  <p>잔액: <b id="balance">-</b></p>
+  <input id="betAmount" type="number" placeholder="베팅 금액" value="1000" />
+  <button onclick="startRound()">시작</button>
+
+  <div id="card">-</div>
+  <p id="oddsText"></p>
+
+  <div class="row">
+    <button onclick="guess('lower')">낮음 ↓</button>
+    <button onclick="guess('higher')">높음 ↑</button>
+  </div>
+  <button onclick="cashout()">캐시아웃</button>
+
+  <p>현재 배수: <b id="multiplier">1.00</b>x</p>
+  <div id="log"></div>
+</section>
+
+<script>
+let token = null;
+let socket = null;
+let roundId = null;
+
+function log(msg) {
+  document.getElementById("log").textContent = msg + "\n" + document.getElementById("log").textContent;
+}
+
+async function register() {
+  await authRequest("/api/auth/register");
+}
+async function login() {
+  await authRequest("/api/auth/login");
+}
+
+async function authRequest(path) {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "실패");
+
+  token = data.token;
+  document.getElementById("balance").textContent = data.user.balance;
+  document.getElementById("authBox").style.display = "none";
+  document.getElementById("gameBox").style.display = "block";
+  connectSocket();
+}
+
+function connectSocket() {
+  socket = io({ auth: { token } });
+  socket.on("connect_error", (err) => log("연결 오류: " + err.message));
+}
+
+function startRound() {
+  const betAmount = Number(document.getElementById("betAmount").value);
+  socket.emit("hilo:start", { betAmount }, (res) => {
+    if (!res.ok) return alert(res.error);
+    roundId = res.roundId;
+    document.getElementById("card").textContent = res.card.rank + res.card.suit;
+    document.getElementById("balance").textContent = res.balance;
+    document.getElementById("multiplier").textContent = res.multiplier.toFixed(2);
+    document.getElementById("oddsText").textContent =
+      `높음 x${res.odds.higher.multiplier ?? "-"} / 낮음 x${res.odds.lower.multiplier ?? "-"}`;
+    log("라운드 시작, 카드: " + res.card.rank + res.card.suit);
+  });
+}
+
+function guess(direction) {
+  if (!roundId) return alert("먼저 시작하세요.");
+  socket.emit("hilo:guess", { roundId, direction }, (res) => {
+    if (!res.ok) return alert(res.error);
+    document.getElementById("card").textContent = res.drawnCard.rank + res.drawnCard.suit;
+
+    if (res.result === "lose") {
+      log("실패! 카드: " + res.drawnCard.rank + res.drawnCard.suit);
+      document.getElementById("multiplier").textContent = "0.00";
+      roundId = null;
+      return;
+    }
+
+    document.getElementById("multiplier").textContent = res.multiplier.toFixed(2);
+    document.getElementById("oddsText").textContent =
+      `높음 x${res.nextOdds.higher.multiplier ?? "-"} / 낮음 x${res.nextOdds.lower.multiplier ?? "-"}`;
+    log("성공! 배수: " + res.multiplier);
+  });
+}
+
+function cashout() {
+  if (!roundId) return alert("진행 중인 라운드가 없습니다.");
+  socket.emit("hilo:cashout", { roundId }, (res) => {
+    if (!res.ok) return alert(res.error);
+    document.getElementById("balance").textContent = res.balance;
+    log("캐시아웃: +" + res.payout);
+    roundId = null;
+    document.getElementById("multiplier").textContent = "1.00";
+  });
+}
+</script>
+</body>
+</html>
