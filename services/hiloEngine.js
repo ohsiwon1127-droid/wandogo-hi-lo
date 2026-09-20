@@ -16,7 +16,9 @@ const RANK_LABEL = {
 };
 
 const DEFAULT_HOUSE_EDGE = 0.01; // 1%
-const TIE_RULE = "loss"; // 'loss' | 'push' — 동점 처리 방식. 필요시 변경.
+// 동점(Tie) 규칙: 'push' — 승패 처리 없이 배수 변화 없이 그대로 넘어감(재도전).
+// 이렇게 해야 높음+낮음 확률의 합이 정확히 100%가 되어 배당이 부풀려지지 않음.
+const TIE_RULE = "push";
 
 /**
  * 암호학적으로 안전한 난수로 카드 한 장을 뽑는다.
@@ -47,19 +49,27 @@ function countRelations(currentValue) {
     else if (v < currentValue) lower += 4;
     else tie += 4;
   }
-  return { higher, lower, tie, total: 52 };
+  const total = 52;
+  const effectiveTotal = total - tie; // 동점(push)을 제외한, 승패가 갈리는 카드 수
+  return { higher, lower, tie, total, effectiveTotal };
 }
 
 /**
  * 특정 방향 적중 확률에 대한 배당 배수 계산.
  * multiplier = (1 / 확률) * (1 - 하우스엣지)
+ * 동점은 push(무효 처리)이므로, 확률의 분모는 동점을 뺀 '승패가 갈리는 카드 수'를 쓴다.
+ * 그래야 높음+낮음 확률의 합이 정확히 100%가 되어 배당이 부풀려지지 않는다.
  * count가 0이면 (예: 현재 카드가 A=14일 때 '높음') 그 방향은 선택 불가.
  */
-function calcMultiplier(favorableCount, total, houseEdge = DEFAULT_HOUSE_EDGE) {
+const MIN_MULTIPLIER = 1.01; // 승리 시 원금보다 적게 받는 일이 없도록 하는 하한선
+
+function calcMultiplier(favorableCount, effectiveTotal, houseEdge = DEFAULT_HOUSE_EDGE) {
   if (favorableCount <= 0) return null;
-  const probability = favorableCount / total;
+  const probability = favorableCount / effectiveTotal;
   const multiplier = (1 / probability) * (1 - houseEdge);
-  return Math.round(multiplier * 100) / 100;
+  // 극단 카드(2 또는 A)처럼 승리 확률이 100%에 가까우면 하우스엣지 적용 시
+  // 배당이 1 밑으로 떨어질 수 있음 (승리했는데 원금보다 적게 받는 모순) -> 하한 보정
+  return Math.max(MIN_MULTIPLIER, Math.round(multiplier * 100) / 100);
 }
 
 /**
@@ -67,21 +77,21 @@ function calcMultiplier(favorableCount, total, houseEdge = DEFAULT_HOUSE_EDGE) {
  * 프론트에 "각 선택 옆에 확률과 배당 표시" 하는 데 그대로 사용.
  */
 function getOdds(currentValue, houseEdge = DEFAULT_HOUSE_EDGE) {
-  const { higher, lower, tie, total } = countRelations(currentValue);
+  const { higher, lower, tie, total, effectiveTotal } = countRelations(currentValue);
   return {
     higher: {
       count: higher,
-      probability: +(higher / total).toFixed(4),
-      multiplier: calcMultiplier(higher, total, houseEdge),
+      probability: effectiveTotal > 0 ? +(higher / effectiveTotal).toFixed(4) : 0,
+      multiplier: calcMultiplier(higher, effectiveTotal, houseEdge),
     },
     lower: {
       count: lower,
-      probability: +(lower / total).toFixed(4),
-      multiplier: calcMultiplier(lower, total, houseEdge),
+      probability: effectiveTotal > 0 ? +(lower / effectiveTotal).toFixed(4) : 0,
+      multiplier: calcMultiplier(lower, effectiveTotal, houseEdge),
     },
     tie: {
       count: tie,
-      probability: +(tie / total).toFixed(4),
+      probability: +(tie / total).toFixed(4), // 참고용: 다음 드로우가 동점(push)일 확률
     },
   };
 }
@@ -90,6 +100,9 @@ function getOdds(currentValue, houseEdge = DEFAULT_HOUSE_EDGE) {
  * 한 번의 예측(guess)을 판정.
  * direction: 'higher' | 'lower'
  * 반환: { win, drawnCard, tie }
+ *   win === true  -> 적중 (배수 상승)
+ *   win === false -> 실패 (라운드 종료)
+ *   win === null  -> 동점(push): 승패 없음, 배수 변화 없이 그대로 다시 예측
  */
 function resolveGuess(currentValue, direction) {
   const drawn = drawCard();
@@ -97,8 +110,6 @@ function resolveGuess(currentValue, direction) {
 
   let win;
   if (isTie) {
-    // TIE_RULE === 'loss' -> 동점은 무조건 실패 처리
-    // TIE_RULE === 'push' -> 필요시 별도 재드로우 로직으로 확장
     win = TIE_RULE === "push" ? null : false;
   } else if (direction === "higher") {
     win = drawn.value > currentValue;
