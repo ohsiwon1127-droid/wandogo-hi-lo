@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>하이로 관리자</title>
+<style>
+  :root {
+    --bg: #f5f3ef; --card-bg: #ffffff; --text: #1f1b16; --text-dim: #6b6259;
+    --border: #e4ded4; --accent: #b4472c; --accent-2: #2f6f4f; --gold: #a67c2e;
+    --shadow: 0 8px 24px rgba(30, 20, 10, 0.08); --pending-bg: #fdf3e2; --pending-text: #9a6b12;
+    --approved-bg: #e7f4ec; --approved-text: #2f6f4f; --rejected-bg: #fbeae5; --rejected-text: #b4472c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14110d; --card-bg: #1f1a14; --text: #f1ece3; --text-dim: #a89c8c;
+      --border: #332b21; --accent: #e2735a; --accent-2: #57b586; --gold: #d9a83f;
+      --shadow: 0 8px 28px rgba(0,0,0,0.5);
+      --pending-bg: #3a2c10; --pending-text: #e0b25a; --approved-bg: #17281f; --approved-text: #7fd6a4;
+      --rejected-bg: #33201a; --rejected-text: #e2735a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Segoe UI", sans-serif; }
+  body { min-height:100vh; padding: 24px 16px 60px; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  header h1 { font-size:20px; margin:0; }
+  header a { font-size:12px; color: var(--text-dim); text-decoration:none; border:1px solid var(--border);
+    padding:6px 10px; border-radius:8px; }
+  header button.linklike { font-size:12px; color: var(--text-dim); background:none; border:1px solid var(--border);
+    padding:6px 10px; border-radius:8px; cursor:pointer; font-family:inherit; }
+
+  .panel { background: var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:20px;
+    box-shadow: var(--shadow); margin-bottom:16px; }
+
+  input { width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); background: var(--bg);
+    color: var(--text); font-size:15px; font-family:inherit; margin-bottom:10px; }
+  .btn { padding:11px 16px; border-radius:10px; border:none; font-size:14px; font-weight:700; cursor:pointer;
+    font-family:inherit; }
+  .btn-primary { background: var(--accent); color:#fff; width:100%; }
+  .form-msg { font-size:13px; margin-top:8px; text-align:center; color: var(--text-dim); }
+  .form-msg.err { color: var(--accent); }
+
+  .stat-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:16px; }
+  .stat-card { background: var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:14px;
+    box-shadow: var(--shadow); }
+  .stat-card .label { font-size:11px; color: var(--text-dim); }
+  .stat-card .value { font-size:20px; font-weight:800; margin-top:4px; }
+
+  table { width:100%; border-collapse: collapse; font-size:13px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  th { color: var(--text-dim); font-weight:600; font-size:12px; }
+  .badge { display:inline-block; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:700; }
+  .badge.pending { background: var(--pending-bg); color: var(--pending-text); }
+  .badge.approved { background: var(--approved-bg); color: var(--approved-text); }
+  .badge.rejected { background: var(--rejected-bg); color: var(--rejected-text); }
+  .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .row-actions button { padding:6px 10px; font-size:12px; border-radius:7px; border:1px solid var(--border);
+    background: var(--bg); color: var(--text); cursor:pointer; font-family:inherit; }
+  .row-actions button.approve { border-color: var(--accent-2); color: var(--accent-2); }
+  .row-actions button.reject { border-color: var(--accent); color: var(--accent); }
+  .balance-form { display:flex; gap:4px; align-items:center; }
+  .balance-form input { width: 90px; margin-bottom:0; padding:6px 8px; font-size:12px; }
+  .balance-form button { padding:6px 8px; font-size:11px; }
+
+  .empty { text-align:center; padding: 24px; color: var(--text-dim); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🛠️ 하이로 관리자</h1>
+    <div>
+      <a href="/">플레이어 화면</a>
+      <button class="linklike" id="logoutBtn" onclick="logout()" style="display:none;">로그아웃</button>
+    </div>
+  </header>
+
+  <div class="panel" id="loginPanel">
+    <input id="adminUsername" placeholder="관리자 아이디" />
+    <input id="adminPassword" type="password" placeholder="비밀번호" />
+    <button class="btn btn-primary" onclick="adminLogin()">로그인</button>
+    <div class="form-msg" id="loginMsg"></div>
+  </div>
+
+  <div id="dashboard" style="display:none;">
+    <div class="stat-grid" id="statGrid"></div>
+
+    <div class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>아이디</th>
+            <th>상태</th>
+            <th>잔액</th>
+            <th>가입일</th>
+            <th>승인/거절</th>
+            <th>잔액 조정</th>
+          </tr>
+        </thead>
+        <tbody id="userRows"></tbody>
+      </table>
+      <div class="empty" id="emptyMsg" style="display:none;">등록된 유저가 없습니다.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let token = null;
+
+async function api(path, method, body) {
+  const res = await fetch(path, {
+    method: method || "GET",
+    headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: "Bearer " + token } : {}),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: res.status, data: await res.json() };
+}
+
+async function adminLogin() {
+  const username = document.getElementById("adminUsername").value.trim();
+  const password = document.getElementById("adminPassword").value;
+  const msgEl = document.getElementById("loginMsg");
+  msgEl.textContent = "";
+
+  const { data } = await api("/api/auth/login", "POST", { username, password });
+  if (!data.ok) { msgEl.textContent = data.error || "로그인 실패"; msgEl.className = "form-msg err"; return; }
+  if (data.user.role !== "admin") { msgEl.textContent = "관리자 계정이 아닙니다."; msgEl.className = "form-msg err"; return; }
+
+  token = data.token;
+  try { localStorage.setItem("hilo_admin_token", token); } catch (e) {}
+  showDashboard();
+}
+
+function logout() {
+  token = null;
+  try { localStorage.removeItem("hilo_admin_token"); } catch (e) {}
+  document.getElementById("loginPanel").style.display = "";
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("logoutBtn").style.display = "none";
+}
+
+async function tryRestore() {
+  let saved = null;
+  try { saved = localStorage.getItem("hilo_admin_token"); } catch (e) {}
+  if (!saved) return;
+  token = saved;
+  const { data } = await api("/api/admin/stats");
+  if (data.ok) showDashboard();
+  else { token = null; try { localStorage.removeItem("hilo_admin_token"); } catch (e) {} }
+}
+
+function showDashboard() {
+  document.getElementById("loginPanel").style.display = "none";
+  document.getElementById("dashboard").style.display = "";
+  document.getElementById("logoutBtn").style.display = "";
+  refresh();
+}
+
+function statusBadge(status) {
+  const label = status === "pending" ? "대기중" : status === "approved" ? "승인됨" : "거절됨";
+  return '<span class="badge ' + status + '">' + label + '</span>';
+}
+
+async function refresh() {
+  const [{ data: statsData }, { data: usersData }] = await Promise.all([
+    api("/api/admin/stats"),
+    api("/api/admin/users"),
+  ]);
+
+  if (statsData.ok) {
+    const s = statsData.stats;
+    document.getElementById("statGrid").innerHTML = [
+      ["전체 유저", s.totalUsers],
+      ["승인 대기", s.pendingUsers],
+      ["승인됨", s.approvedUsers],
+      ["전체 보유 잔액", s.totalBalance.toLocaleString()],
+      ["총 라운드 수", s.totalRounds],
+      ["총 베팅액", s.totalWagered.toLocaleString()],
+    ].map(([label, value]) =>
+      '<div class="stat-card"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>'
+    ).join("");
+  }
+
+  if (usersData.ok) renderUsers(usersData.users);
+}
+
+function renderUsers(users) {
+  const tbody = document.getElementById("userRows");
+  document.getElementById("emptyMsg").style.display = users.length ? "none" : "";
+
+  tbody.innerHTML = users.map((u) => {
+    const created = new Date(u.createdAt).toLocaleDateString("ko-KR");
+    const actionButtons = u.role === "admin"
+      ? '<span style="color:var(--text-dim); font-size:12px;">관리자 계정</span>'
+      : [
+          u.status !== "approved" ? '<button class="approve" onclick="approveUser(\'' + u._id + '\')">승인</button>' : "",
+          u.status !== "rejected" ? '<button class="reject" onclick="rejectUser(\'' + u._id + '\')">거절</button>' : "",
+        ].join("");
+
+    return '<tr>' +
+      '<td>' + escapeHtml(u.username) + (u.role === "admin" ? ' 👑' : '') + '</td>' +
+      '<td>' + statusBadge(u.status) + '</td>' +
+      '<td>' + u.balance.toLocaleString() + '</td>' +
+      '<td>' + created + '</td>' +
+      '<td><div class="row-actions">' + actionButtons + '</div></td>' +
+      '<td>' + (u.role === "admin" ? "-" : balanceFormHtml(u._id)) + '</td>' +
+      '</tr>';
+  }).join("");
+}
+
+function balanceFormHtml(userId) {
+  const inputId = "amt_" + userId;
+  return '<div class="balance-form">' +
+    '<input id="' + inputId + '" type="number" placeholder="금액" />' +
+    '<button onclick="adjustBalance(\'' + userId + '\', \'' + inputId + '\', 1)">충전</button>' +
+    '<button onclick="adjustBalance(\'' + userId + '\', \'' + inputId + '\', -1)">차감</button>' +
+    '</div>';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function approveUser(id) {
+  await api("/api/admin/users/" + id + "/approve", "POST");
+  refresh();
+}
+async function rejectUser(id) {
+  if (!confirm("정말 거절하시겠습니까?")) return;
+  await api("/api/admin/users/" + id + "/reject", "POST");
+  refresh();
+}
+async function adjustBalance(userId, inputId, sign) {
+  const raw = Number(document.getElementById(inputId).value);
+  if (!Number.isFinite(raw) || raw <= 0) { alert("올바른 금액을 입력하세요."); return; }
+  const amount = raw * sign;
+  const { data } = await api("/api/admin/users/" + userId + "/balance", "POST", { amount });
+  if (!data.ok) { alert(data.error || "처리 실패"); return; }
+  refresh();
+}
+
+tryRestore();
+</script>
+</body>
+</html>
