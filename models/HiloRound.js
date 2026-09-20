@@ -14,7 +14,7 @@ const historyEntrySchema = new mongoose.Schema(
   {
     card: { type: cardSchema, required: true },
     direction: { type: String, enum: ["higher", "lower"], required: true },
-    win: { type: Boolean, required: true },
+    result: { type: String, enum: ["win", "lose", "push"], required: true },
     multiplierAfter: { type: Number, required: true },
   },
   { _id: false }
