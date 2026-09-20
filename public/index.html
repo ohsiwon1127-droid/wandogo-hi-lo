@@ -2,131 +2,441 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<title>Hilo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>하이로 (Hi-Lo)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <style>
-  body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
-  input, button { font-size: 16px; padding: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
-  .row { display: flex; gap: 8px; }
-  .row > button { flex: 1; }
-  #card { font-size: 48px; text-align: center; margin: 16px 0; }
-  #log { font-size: 13px; color: #555; white-space: pre-wrap; }
-  section { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  :root {
+    --bg: #f5f3ef; --card-bg: #ffffff; --text: #1f1b16; --text-dim: #6b6259;
+    --border: #e4ded4; --accent: #b4472c; --accent-2: #2f6f4f; --gold: #a67c2e;
+    --shadow: 0 8px 24px rgba(30, 20, 10, 0.08); --felt: #1f4d3a; --felt-line: rgba(255,255,255,0.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14110d; --card-bg: #1f1a14; --text: #f1ece3; --text-dim: #a89c8c;
+      --border: #332b21; --accent: #e2735a; --accent-2: #57b586; --gold: #d9a83f;
+      --shadow: 0 8px 28px rgba(0,0,0,0.5); --felt: #0d2b20; --felt-line: rgba(255,255,255,0.08);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Segoe UI", sans-serif; }
+  body { min-height: 100vh; display: flex; justify-content: center; padding: 24px 14px 60px; }
+  .wrap { width: 100%; max-width: 480px; }
+
+  header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: 0.02em; }
+  header .actions { display:flex; gap:8px; align-items:center; }
+  header a, header button.linklike {
+    font-size: 12px; color: var(--text-dim); text-decoration: none;
+    background: none; border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; cursor:pointer;
+    font-family: inherit;
+  }
+  header a:hover, header button.linklike:hover { border-color: var(--accent); color: var(--accent); }
+
+  .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .panel h2 { margin: 0 0 14px; font-size: 16px; }
+  .tabs { display:flex; gap:6px; margin-bottom: 16px; }
+  .tabs button { flex:1; padding: 9px; border-radius: 8px; border:1px solid var(--border);
+    background: var(--bg); color: var(--text-dim); font-family: inherit; cursor:pointer; font-size:13px; }
+  .tabs button.active { background: var(--accent); color:#fff; border-color: var(--accent); }
+
+  input { width:100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 15px; font-family: inherit; margin-bottom: 10px; }
+  .btn { width: 100%; padding: 13px; border-radius: 10px; border: none; font-size: 15px;
+    font-weight: 700; cursor: pointer; font-family: inherit; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .form-msg { font-size: 13px; margin-top: 10px; text-align:center; color: var(--text-dim); min-height: 18px; }
+  .form-msg.err { color: var(--accent); }
+  .form-msg.ok { color: var(--accent-2); }
+
+  .stat-row { display:flex; gap:10px; margin-bottom: 14px; }
+  .stat-bar { flex:1; background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+    padding: 12px 14px; box-shadow: var(--shadow); }
+  .stat-bar .label { font-size: 10px; color: var(--text-dim); }
+  .stat-bar .value { font-size: 17px; font-weight: 700; }
+  .stat-bar .value.balance { color: var(--gold); }
+  .stat-bar .value.mult { color: var(--accent-2); }
+  .stat-bar .value.payout { color: var(--accent); }
+
+  .felt { background: radial-gradient(ellipse at top, var(--felt), #0a1f16); border: 1px solid var(--felt-line);
+    border-radius: 18px; padding: 28px 16px 22px; display:flex; flex-direction:column; align-items:center;
+    gap: 18px; box-shadow: var(--shadow); margin-bottom: 14px; }
+
+  .card { position: relative; width: 108px; height: 152px; border-radius: 10px;
+    background: linear-gradient(160deg, #fffdf8, #f3ede0);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(0,0,0,0.06), inset 0 0 24px rgba(0,0,0,0.03);
+    transition: transform 0.35s ease; overflow: hidden; }
+  .card.flip { animation: flip 0.4s ease; }
+  @keyframes flip { 0% { transform: rotateY(90deg) scale(0.9); opacity:0.3; } 100% { transform: rotateY(0deg) scale(1); opacity:1; } }
+  .card.red { color: #b4272a; } .card.black { color: #1c1c1c; }
+  .card .corner { position:absolute; display:flex; flex-direction:column; align-items:center; line-height:1; font-weight:800; }
+  .card .corner .r { font-size:17px; } .card .corner .s { font-size:14px; margin-top:1px; }
+  .card .corner.tl { top:8px; left:8px; } .card .corner.br { bottom:8px; right:8px; transform: rotate(180deg); }
+  .card .center-suit { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:52px; opacity:0.9; }
+  .card .center-suit.face { font-size:22px; font-weight:800; letter-spacing:0.05em; opacity:0.85; flex-direction:column; gap:4px; }
+  .card .center-suit.face .big-letter { font-size:40px; }
+  .card.placeholder { background: repeating-linear-gradient(45deg, var(--felt) 0px, var(--felt) 8px, #163a2b 8px, #163a2b 16px);
+    box-shadow: inset 0 0 0 4px rgba(255,255,255,0.08), inset 0 0 0 8px rgba(0,0,0,0.15); }
+  .card.placeholder .center-suit { font-size:13px; font-weight:600; color: rgba(255,255,255,0.55); text-align:center; line-height:1.5; padding:0 10px; }
+
+  .odds-row { display:flex; gap:10px; width:100%; }
+  .odds-btn { flex:1; background: rgba(255,255,255,0.06); border:1px solid var(--felt-line); color:#fff;
+    border-radius:12px; padding:12px 8px; text-align:center; cursor:pointer; font-family:inherit; }
+  .odds-btn:hover:not(:disabled) { background: rgba(255,255,255,0.14); }
+  .odds-btn:disabled { opacity:0.35; cursor:not-allowed; }
+  .odds-btn .dir { font-size:15px; font-weight:700; margin-bottom:2px; }
+  .odds-btn .mult { font-size:18px; font-weight:800; color: var(--gold); }
+  .odds-btn .payout { font-size:11px; opacity:0.85; margin-top:3px; color:#bfe8d2; }
+  .odds-btn .prob { font-size:11px; opacity:0.6; margin-top:1px; }
+
+  .controls { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
+  .bet-row { display:flex; gap:8px; margin-bottom:10px; }
+  .bet-row input { flex:1; min-width:0; margin-bottom:0; }
+  .bet-row button { width:auto; padding: 11px 18px; }
+  .chip-row { display:flex; gap:6px; margin-bottom:12px; }
+  .chip { flex:1; padding:6px 0; border-radius:8px; border:1px solid var(--border); background: var(--bg);
+    color: var(--text-dim); font-size:12px; cursor:pointer; font-family:inherit; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-cashout { background: var(--accent-2); color:#fff; margin-top:8px; }
+
+  .msg { text-align:center; font-size:13px; margin-top:10px; min-height:18px; color: var(--text-dim); }
+  .msg.win { color: var(--accent-2); font-weight:700; }
+  .msg.lose { color: var(--accent); font-weight:700; }
+
+  .history { margin-top:14px; font-size:12px; color: var(--text-dim); max-height:110px; overflow-y:auto;
+    border-top: 1px dashed var(--border); padding-top:8px; }
+  .history div { padding:2px 0; }
+
+  .approval-box { text-align:center; padding: 30px 16px; }
+  .approval-box .icon { font-size: 40px; margin-bottom: 10px; }
+  .approval-box p { color: var(--text-dim); font-size: 14px; line-height:1.6; }
+
+  footer { text-align:center; font-size:11px; color: var(--text-dim); margin-top:18px; line-height:1.6; }
 </style>
 </head>
 <body>
+<div class="wrap">
+  <header>
+    <h1>🃏 하이로</h1>
+    <div class="actions" id="headerActions"></div>
+  </header>
 
-<section id="authBox">
-  <h3>로그인 / 회원가입</h3>
-  <input id="username" placeholder="아이디" />
-  <input id="password" type="password" placeholder="비밀번호 (6자 이상)" />
-  <div class="row">
-    <button onclick="register()">회원가입</button>
-    <button onclick="login()">로그인</button>
+  <!-- 로그인/회원가입 -->
+  <div class="panel" id="authPanel">
+    <div class="tabs">
+      <button class="active" id="tabLogin" onclick="switchTab('login')">로그인</button>
+      <button id="tabRegister" onclick="switchTab('register')">회원가입</button>
+    </div>
+
+    <div id="loginForm">
+      <input id="loginUsername" placeholder="아이디" autocomplete="username" />
+      <input id="loginPassword" type="password" placeholder="비밀번호" autocomplete="current-password" />
+      <button class="btn btn-primary" onclick="login()">로그인</button>
+      <div class="form-msg" id="loginMsg"></div>
+    </div>
+
+    <div id="registerForm" style="display:none;">
+      <input id="regUsername" placeholder="아이디 (3자 이상)" />
+      <input id="regPassword" type="password" placeholder="비밀번호 (6자 이상)" />
+      <button class="btn btn-primary" onclick="register()">가입 신청</button>
+      <div class="form-msg" id="regMsg"></div>
+    </div>
   </div>
-</section>
 
-<section id="gameBox" style="display:none;">
-  <p>잔액: <b id="balance">-</b></p>
-  <input id="betAmount" type="number" placeholder="베팅 금액" value="1000" />
-  <button onclick="startRound()">시작</button>
-
-  <div id="card">-</div>
-  <p id="oddsText"></p>
-
-  <div class="row">
-    <button onclick="guess('lower')">낮음 ↓</button>
-    <button onclick="guess('higher')">높음 ↑</button>
+  <!-- 승인 대기 안내 -->
+  <div class="panel approval-box" id="pendingPanel" style="display:none;">
+    <div class="icon">⏳</div>
+    <p>가입 신청이 접수되었습니다.<br/>관리자 승인 후 로그인할 수 있어요.</p>
   </div>
-  <button onclick="cashout()">캐시아웃</button>
 
-  <p>현재 배수: <b id="multiplier">1.00</b>x</p>
-  <div id="log"></div>
-</section>
+  <!-- 게임 화면 -->
+  <div id="gameArea" style="display:none;">
+    <div class="stat-row">
+      <div class="stat-bar"><div class="label">잔액</div><div class="value balance" id="balanceText">-</div></div>
+      <div class="stat-bar"><div class="label">배수</div><div class="value mult" id="multText">1.00x</div></div>
+      <div class="stat-bar"><div class="label">예상 수령액</div><div class="value payout" id="payoutText">-</div></div>
+    </div>
+
+    <div class="felt">
+      <div class="card placeholder" id="cardEl"><div class="center-suit">시작하면<br/>카드가 나와요</div></div>
+      <div class="odds-row">
+        <button class="odds-btn" id="lowerBtn" disabled onclick="guess('lower')">
+          <div class="dir">낮음 ↓</div>
+          <div class="mult" id="lowerMult">-</div>
+          <div class="payout" id="lowerPayout"></div>
+          <div class="prob" id="lowerProb"></div>
+        </button>
+        <button class="odds-btn" id="higherBtn" disabled onclick="guess('higher')">
+          <div class="dir">높음 ↑</div>
+          <div class="mult" id="higherMult">-</div>
+          <div class="payout" id="higherPayout"></div>
+          <div class="prob" id="higherProb"></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="bet-row">
+        <input id="betInput" type="number" min="10" step="10" value="100" />
+        <button class="btn btn-primary" id="startBtn" onclick="startRound()">시작</button>
+      </div>
+      <div class="chip-row">
+        <button class="chip" onclick="setBet(100)">100</button>
+        <button class="chip" onclick="setBet(500)">500</button>
+        <button class="chip" onclick="setBet(1000)">1,000</button>
+        <button class="chip" onclick="halveBet()">½</button>
+        <button class="chip" onclick="doubleBet()">2x</button>
+      </div>
+      <button class="btn btn-cashout" id="cashoutBtn" disabled onclick="cashout()">캐시아웃</button>
+      <div class="msg" id="msgEl"></div>
+      <div class="history" id="historyEl"></div>
+    </div>
+  </div>
+
+  <footer>확률·배당은 표준 52장 기준, 동점은 무효(push) 처리, 하우스엣지 1% 적용</footer>
+</div>
 
 <script>
 let token = null;
 let socket = null;
 let roundId = null;
+let currentCard = null;
+let multiplier = 1;
+let betAmount = 100;
+let roundActive = false;
+let myRole = "user";
 
-function log(msg) {
-  document.getElementById("log").textContent = msg + "\n" + document.getElementById("log").textContent;
+function show(id) {
+  ["authPanel", "pendingPanel", "gameArea"].forEach((x) => {
+    document.getElementById(x).style.display = x === id ? "" : "none";
+  });
+}
+function switchTab(tab) {
+  document.getElementById("tabLogin").classList.toggle("active", tab === "login");
+  document.getElementById("tabRegister").classList.toggle("active", tab === "register");
+  document.getElementById("loginForm").style.display = tab === "login" ? "" : "none";
+  document.getElementById("registerForm").style.display = tab === "register" ? "" : "none";
+}
+
+function renderHeader() {
+  const el = document.getElementById("headerActions");
+  if (!token) { el.innerHTML = ""; return; }
+  el.innerHTML = (myRole === "admin" ? '<a href="/admin.html">관리자</a>' : "") +
+    '<button class="linklike" onclick="logout()">로그아웃</button>';
+}
+
+function logout() {
+  token = null;
+  try { localStorage.removeItem("hilo_token"); } catch (e) {}
+  if (socket) socket.close();
+  renderHeader();
+  show("authPanel");
 }
 
 async function register() {
-  await authRequest("/api/auth/register");
-}
-async function login() {
-  await authRequest("/api/auth/login");
-}
-
-async function authRequest(path) {
-  const username = document.getElementById("username").value;
-  const password = document.getElementById("password").value;
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  const username = document.getElementById("regUsername").value.trim();
+  const password = document.getElementById("regPassword").value;
+  const msgEl = document.getElementById("regMsg");
+  msgEl.className = "form-msg";
+  const res = await fetch("/api/auth/register", {
+    method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
   const data = await res.json();
-  if (!data.ok) return alert(data.error || "실패");
+  if (!data.ok) { msgEl.textContent = data.error; msgEl.className = "form-msg err"; return; }
+  msgEl.textContent = data.message; msgEl.className = "form-msg ok";
+}
+
+async function login() {
+  const username = document.getElementById("loginUsername").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const msgEl = document.getElementById("loginMsg");
+  msgEl.className = "form-msg";
+
+  const res = await fetch("/api/auth/login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+
+  if (!data.ok) {
+    if (data.status === "pending") { show("pendingPanel"); return; }
+    msgEl.textContent = data.error; msgEl.className = "form-msg err";
+    return;
+  }
 
   token = data.token;
-  document.getElementById("balance").textContent = data.user.balance;
-  document.getElementById("authBox").style.display = "none";
-  document.getElementById("gameBox").style.display = "block";
+  myRole = data.user.role;
+  try { localStorage.setItem("hilo_token", token); } catch (e) {}
+  enterGame(data.user);
+}
+
+async function tryRestoreSession() {
+  let saved = null;
+  try { saved = localStorage.getItem("hilo_token"); } catch (e) {}
+  if (!saved) return;
+
+  const res = await fetch("/api/auth/me", { headers: { Authorization: "Bearer " + saved } });
+  const data = await res.json();
+  if (data.ok) {
+    token = saved;
+    myRole = data.user.role;
+    enterGame(data.user);
+  } else {
+    try { localStorage.removeItem("hilo_token"); } catch (e) {}
+  }
+}
+
+function enterGame(user) {
+  renderHeader();
+  show("gameArea");
+  document.getElementById("balanceText").textContent = user.balance.toLocaleString();
   connectSocket();
 }
 
 function connectSocket() {
   socket = io({ auth: { token } });
-  socket.on("connect_error", (err) => log("연결 오류: " + err.message));
+  socket.on("connect_error", (err) => setMsg(err.message, "lose"));
+}
+
+function setBet(v) { if (!roundActive) document.getElementById("betInput").value = v; }
+function doubleBet() { if (roundActive) return; const el = document.getElementById("betInput"); el.value = Math.max(10, Number(el.value) * 2); }
+function halveBet() { if (roundActive) return; const el = document.getElementById("betInput"); el.value = Math.max(10, Math.round(Number(el.value) / 2)); }
+
+const FACE_RANKS = { J: "J", Q: "Q", K: "K" };
+function renderCard(card, animate) {
+  const el = document.getElementById("cardEl");
+  el.className = "card " + card.color + (animate ? " flip" : "");
+  const corner = (cls) => '<div class="corner ' + cls + '"><div class="r">' + card.rank + '</div><div class="s">' + card.suit + '</div></div>';
+  const center = FACE_RANKS[card.rank]
+    ? '<div class="center-suit face"><div class="big-letter">' + card.rank + '</div><div>' + card.suit + '</div></div>'
+    : '<div class="center-suit">' + card.suit + '</div>';
+  el.innerHTML = corner("tl") + center + corner("br");
+}
+
+function suitColor(suit) { return (suit === "♥" || suit === "♦") ? "red" : "black"; }
+
+function renderStats() {
+  document.getElementById("multText").textContent = multiplier.toFixed(2) + "x";
+  document.getElementById("payoutText").textContent = roundActive ? Math.round(betAmount * multiplier).toLocaleString() : "-";
+  document.getElementById("cashoutBtn").disabled = !roundActive;
+  document.getElementById("startBtn").disabled = roundActive;
+  document.getElementById("betInput").disabled = roundActive;
+}
+
+function renderOdds(odds) {
+  const higherBtn = document.getElementById("higherBtn");
+  const lowerBtn = document.getElementById("lowerBtn");
+
+  function fillSide(side, mEl, pEl, probEl, btn) {
+    if (side.multiplier === null) {
+      mEl.textContent = "선택불가"; pEl.textContent = ""; probEl.textContent = "";
+      btn.disabled = true;
+      return;
+    }
+    mEl.textContent = side.multiplier.toFixed(2) + "x";
+    const nextMultiplier = multiplier * side.multiplier;
+    pEl.textContent = "예상 " + Math.round(betAmount * nextMultiplier).toLocaleString();
+    probEl.textContent = "확률 " + (side.probability * 100).toFixed(1) + "%";
+    btn.disabled = !roundActive;
+  }
+
+  fillSide(odds.higher, document.getElementById("higherMult"), document.getElementById("higherPayout"), document.getElementById("higherProb"), higherBtn);
+  fillSide(odds.lower, document.getElementById("lowerMult"), document.getElementById("lowerPayout"), document.getElementById("lowerProb"), lowerBtn);
+}
+
+function setMsg(text, type) {
+  const el = document.getElementById("msgEl");
+  el.textContent = text;
+  el.className = "msg" + (type ? " " + type : "");
+}
+function addHistory(text) {
+  const el = document.getElementById("historyEl");
+  const line = document.createElement("div");
+  line.textContent = text;
+  el.prepend(line);
+  while (el.children.length > 12) el.removeChild(el.lastChild);
 }
 
 function startRound() {
-  const betAmount = Number(document.getElementById("betAmount").value);
-  socket.emit("hilo:start", { betAmount }, (res) => {
-    if (!res.ok) return alert(res.error);
+  const betInput = document.getElementById("betInput");
+  const bet = Number(betInput.value);
+  if (!Number.isFinite(bet) || bet < 10) { setMsg("베팅 금액은 10 이상이어야 합니다.", "lose"); return; }
+
+  socket.emit("hilo:start", { betAmount: bet }, (res) => {
+    if (!res.ok) { setMsg(res.error, "lose"); return; }
+    betAmount = bet;
     roundId = res.roundId;
-    document.getElementById("card").textContent = res.card.rank + res.card.suit;
-    document.getElementById("balance").textContent = res.balance;
-    document.getElementById("multiplier").textContent = res.multiplier.toFixed(2);
-    document.getElementById("oddsText").textContent =
-      `높음 x${res.odds.higher.multiplier ?? "-"} / 낮음 x${res.odds.lower.multiplier ?? "-"}`;
-    log("라운드 시작, 카드: " + res.card.rank + res.card.suit);
+    currentCard = Object.assign({}, res.card, { color: suitColor(res.card.suit) });
+    multiplier = res.multiplier;
+    roundActive = true;
+
+    document.getElementById("balanceText").textContent = res.balance.toLocaleString();
+    renderCard(currentCard, true);
+    renderStats();
+    renderOdds(res.odds);
+    setMsg("카드가 나왔습니다. 높음/낮음을 선택하세요.");
   });
 }
 
 function guess(direction) {
-  if (!roundId) return alert("먼저 시작하세요.");
-  socket.emit("hilo:guess", { roundId, direction }, (res) => {
-    if (!res.ok) return alert(res.error);
-    document.getElementById("card").textContent = res.drawnCard.rank + res.drawnCard.suit;
+  if (!roundActive) return;
+  socket.emit("hilo:guess", { roundId: roundId, direction: direction }, (res) => {
+    if (!res.ok) { setMsg(res.error, "lose"); return; }
 
-    if (res.result === "lose") {
-      log("실패! 카드: " + res.drawnCard.rank + res.drawnCard.suit);
-      document.getElementById("multiplier").textContent = "0.00";
-      roundId = null;
+    const drawn = Object.assign({}, res.drawnCard, { color: suitColor(res.drawnCard.suit) });
+    renderCard(drawn, true);
+
+    if (res.result === "push") {
+      currentCard = drawn;
+      renderStats();
+      renderOdds(res.nextOdds);
+      setMsg("동점! 배수 변화 없이 다시 예측하세요.", "");
+      addHistory("➖ 동점 (" + drawn.rank + drawn.suit + ") · 배수 변화 없음");
       return;
     }
 
-    document.getElementById("multiplier").textContent = res.multiplier.toFixed(2);
-    document.getElementById("oddsText").textContent =
-      `높음 x${res.nextOdds.higher.multiplier ?? "-"} / 낮음 x${res.nextOdds.lower.multiplier ?? "-"}`;
-    log("성공! 배수: " + res.multiplier);
+    if (res.result === "lose") {
+      roundActive = false;
+      multiplier = 0;
+      renderStats();
+      document.getElementById("higherBtn").disabled = true;
+      document.getElementById("lowerBtn").disabled = true;
+      setMsg("실패! 베팅금을 잃었습니다.", "lose");
+      addHistory("❌ " + (direction === "higher" ? "높음" : "낮음") + " 실패 (" + drawn.rank + drawn.suit + ") · 베팅 " + betAmount.toLocaleString());
+      return;
+    }
+
+    currentCard = drawn;
+    multiplier = res.multiplier;
+    renderStats();
+    renderOdds(res.nextOdds);
+    setMsg("성공! 배수 " + multiplier.toFixed(2) + "x · 예상 수령액 " + res.potentialPayout.toLocaleString(), "win");
+    addHistory("✅ " + (direction === "higher" ? "높음" : "낮음") + " 적중 (" + drawn.rank + drawn.suit + ") · 배수 " + multiplier.toFixed(2) + "x · 예상 수령액 " + res.potentialPayout.toLocaleString());
   });
 }
 
 function cashout() {
-  if (!roundId) return alert("진행 중인 라운드가 없습니다.");
-  socket.emit("hilo:cashout", { roundId }, (res) => {
-    if (!res.ok) return alert(res.error);
-    document.getElementById("balance").textContent = res.balance;
-    log("캐시아웃: +" + res.payout);
-    roundId = null;
-    document.getElementById("multiplier").textContent = "1.00";
+  if (!roundActive) return;
+  socket.emit("hilo:cashout", { roundId: roundId }, (res) => {
+    if (!res.ok) { setMsg(res.error, "lose"); return; }
+    roundActive = false;
+    multiplier = 1;
+    document.getElementById("balanceText").textContent = res.balance.toLocaleString();
+    renderStats();
+    document.getElementById("higherBtn").disabled = true;
+    document.getElementById("lowerBtn").disabled = true;
+    setMsg("캐시아웃 완료: +" + res.payout.toLocaleString(), "win");
+    addHistory("💰 캐시아웃 +" + res.payout.toLocaleString());
   });
 }
+
+switchTab("login");
+tryRestoreSession();
 </script>
 </body>
 </html>
