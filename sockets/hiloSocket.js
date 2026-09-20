@@ -65,10 +65,31 @@ function registerHiloHandlers(io, socket) {
 
       const { win, drawnCard, tie } = resolveGuess(round.currentCard.value, direction);
 
+      // 동점(push): 승패 없음, 배수 변화 없이 카드만 갱신하고 재도전
+      if (win === null) {
+        round.currentCard = drawnCard;
+        round.history.push({
+          card: drawnCard,
+          direction,
+          result: "push",
+          multiplierAfter: round.multiplier,
+        });
+        await round.save();
+
+        return ack?.({
+          ok: true,
+          result: "push",
+          tie: true,
+          drawnCard,
+          multiplier: round.multiplier,
+          nextOdds: getOdds(drawnCard.value),
+        });
+      }
+
       if (win === false) {
         round.status = "lost";
         round.currentCard = drawnCard;
-        round.history.push({ card: drawnCard, direction, win: false, multiplierAfter: 0 });
+        round.history.push({ card: drawnCard, direction, result: "lose", multiplierAfter: 0 });
         await round.save();
         return ack?.({ ok: true, result: "lose", tie, drawnCard, multiplier: 0 });
       }
@@ -76,7 +97,7 @@ function registerHiloHandlers(io, socket) {
       const newMultiplier = +(round.multiplier * chosenOdds.multiplier).toFixed(2);
       round.multiplier = newMultiplier;
       round.currentCard = drawnCard;
-      round.history.push({ card: drawnCard, direction, win: true, multiplierAfter: newMultiplier });
+      round.history.push({ card: drawnCard, direction, result: "win", multiplierAfter: newMultiplier });
       await round.save();
 
       ack?.({
