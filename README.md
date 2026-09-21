@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/32450807/README.md)
+[README.md](https://github.com/user-attachments/files/32451144/README.md)
 # 하이로 (Hi-Lo) 라이브 사이트
 
 카드 예측(Hi-Lo) 게임 사이트. **카드 랩 바카라 프로젝트와 완전히 동일한 구조**로 만들었습니다 —
