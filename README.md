@@ -1,41 +1,32 @@
-[README.md](https://github.com/user-attachments/files/32433956/README.md)
-# Hilo 사이트 (회원 승인제 + 관리자 대시보드)
+[README.md](https://github.com/user-attachments/files/32450807/README.md)
+# 하이로 (Hi-Lo) 라이브 사이트
 
-카드 예측(Hi-Lo) 게임 사이트. 회원가입은 **승인 대기** 상태로 시작하고, 관리자가 승인해야
-로그인/플레이가 가능합니다. 가입 시 지급되는 잔액은 없고(0원), 관리자가 직접 충전/차감합니다.
+카드 예측(Hi-Lo) 게임 사이트. **카드 랩 바카라 프로젝트와 완전히 동일한 구조**로 만들었습니다 —
+단일 `server.js`, `mongodb` 네이티브 드라이버 + 메모리 캐시, 같은 API 경로(`/api/signup`,
+`/api/login`, `/api/me`, `/api/admin/*`), 같은 로그인/회원가입/관리자 화면 디자인. **게임 로직만
+하이로로 바뀌었습니다.**
+
+바카라와 다른 점 하나: 하이로는 유저별 개인 게임이라 바카라처럼 전원이 같은 라운드를 공유하는
+베팅 타이머가 필요 없습니다. 그래서 각자 카드가 다르게 나오고, 진행 중인 라운드는 서버 메모리에만
+있다가 캐시아웃하거나 실패하면 사라집니다 (잔액만 DB에 저장됨).
 
 ## 폴더 구조
 
 ```
-hilo-site/
-├── server.js                # 진입점 (Express + Socket.io + Mongo 연결 + 관리자 계정 자동생성)
-├── models/
-│   ├── User.js               # 유저 (아이디/비밀번호 해시/잔액/승인상태/역할)
-│   ├── HiloRound.js          # 게임 라운드 상태
-│   └── BalanceLog.js         # 관리자 충전/차감 이력
-├── services/
-│   └── hiloEngine.js        # 확률/배당 계산, 카드 드로우 (동점=push 처리)
-├── sockets/
-│   └── hiloSocket.js        # socket.io 이벤트: start / guess / cashout
-├── routes/
-│   ├── auth.js               # 회원가입(승인대기) / 로그인 / 내 정보 조회
-│   └── admin.js              # 관리자 전용: 승인/거절/충전/차감/통계
-├── middleware/
-│   └── auth.js               # JWT, 승인상태 체크, 관리자 권한 체크
-├── public/
-│   ├── index.html            # 플레이어 화면 (로그인/가입/게임, 예상 수령액 표시)
-│   └── admin.html            # 관리자 대시보드
-├── tests/
-│   ├── fakeCollection.js     # 테스트용 인메모리 DB 대체 (실제 배포에는 불필요)
-│   └── e2e.test.js           # 전체 흐름 자동 테스트
+hilo-v2/
+├── server.js          # 전체 로직이 담긴 단일 서버 파일 (바카라와 동일한 패턴)
 ├── package.json
-└── .env.example
+├── .env.example
+├── data/              # MONGODB_URI 없을 때 로컬 저장용 (자동 생성됨)
+└── public/
+    ├── login.html      # 로그인/회원가입 (관리자 코드 입력칸 포함)
+    ├── game.html        # 하이로 게임 화면
+    └── admin.html        # 관리자 패널 (가입승인 · 칩 충전/차감 · 유저 검색)
 ```
 
 ## 1. 로컬 실행
 
 ```bash
-cd hilo-site
 npm install
 cp .env.example .env
 ```
@@ -43,106 +34,86 @@ cp .env.example .env
 `.env`를 채우세요:
 
 ```
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/hilo?retryWrites=true&w=majority
-JWT_SECRET=아무_긴_랜덤_문자열
 PORT=3000
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=원하는_관리자_비밀번호
+JWT_SECRET=아무_긴_랜덤_문자열
+ADMIN_SIGNUP_CODE=원하는_관리자_가입코드
+MONGODB_URI=mongodb+srv://...   (선택. 없으면 data/users.json 파일에 저장)
 ```
-
-`JWT_SECRET`은 이렇게 하나 뽑아서 넣으면 됩니다:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-MongoDB Atlas 연결 방법은 이전 안내와 동일합니다 (Atlas 가입 → 클러스터 생성 → Database Access에서
-DB 유저 생성 → Network Access 허용 → Connect에서 URI 복사, DB 이름은 `hilo`로).
-
-## 2. 실행
 
 ```bash
 npm start
 ```
 
-`http://localhost:3000` → 플레이어 화면
-`http://localhost:3000/admin.html` → 관리자 대시보드
+`http://localhost:3000` → 자동으로 `/login.html`로 이동
 
-**서버를 처음 실행하면** `.env`에 지정한 `ADMIN_USERNAME`/`ADMIN_PASSWORD`로 관리자 계정이
-자동 생성됩니다 (이미 있으면 건너뜀). 이 계정으로 `/admin.html`에서 로그인하세요.
+## 2. 관리자 계정 만들기
 
-## 3. 사용 흐름
+**별도의 관리자 부트스트랩 계정이 없습니다.** 회원가입 화면에서:
+- 아이디: 원하는 대로
+- 비밀번호: 원하는 대로 (본인이 정하는 로그인 비밀번호)
+- 관리자 코드: `.env`의 `ADMIN_SIGNUP_CODE`와 똑같이 입력
 
-1. 플레이어가 `/`에서 아이디/비밀번호로 가입 신청 → **잔액 0원, 승인 대기 상태**로 생성됨
-2. 승인 전에는 로그인 시도 시 "관리자 승인 대기중입니다" 메시지만 뜨고 로그인 불가
-3. 관리자가 `/admin.html`에 로그인 → 대기중인 유저 목록에서 **승인** 클릭
-4. 승인된 유저는 로그인 가능. 잔액은 여전히 0원이므로 베팅 시도 시 "잔액이 부족합니다" 오류
-5. 관리자가 유저 목록에서 금액 입력 후 **충전** 클릭 → 유저 잔액 반영
-6. 유저가 게임 플레이 (하이로: 높음/낮음 예측, 배수 누적, 캐시아웃)
-7. 관리자가 필요 시 **차감**도 가능 (잔액보다 큰 금액은 차감 불가하도록 막아둠)
-8. 모든 충전/차감은 `BalanceLog`에 기록됨 (`GET /api/admin/users/:id/balance-logs`)
+이렇게 가입하면 **승인 대기 없이 즉시 관리자 계정**이 만들어지고, 로그인은 방금 본인이 정한
+비밀번호로 합니다 (관리자 코드는 가입 시 한 번만 쓰이고, 로그인 비밀번호와는 완전히 별개입니다).
 
-## 4. API 요약
+일반 유저는 관리자 코드 칸을 비워두고 가입하면 되고, 이 경우 승인 대기 상태가 되어 관리자가
+`/admin.html`에서 승인해줘야 로그인할 수 있습니다.
 
-**인증 (`/api/auth`)**
-- `POST /register` `{ username, password }` → 승인 대기 상태로 생성 (토큰 발급 안 함)
-- `POST /login` `{ username, password }` → 승인된 계정만 `{ token, user }` 반환
-- `GET /me` (인증 필요) → 최신 잔액 등 재확인
+## 3. 관리자 화면 접근
 
-**관리자 (`/api/admin`, 전부 관리자 인증 필요)**
-- `GET /users` → 전체 유저 목록 (비밀번호 해시 제외)
-- `POST /users/:id/approve` / `/reject` / `/revoke`
-- `POST /users/:id/balance` `{ amount, reason? }` → 양수=충전, 음수=차감
-- `GET /users/:id/balance-logs` → 해당 유저 충전/차감 이력
-- `GET /stats` → 전체 유저 수, 대기중 수, 전체 잔액 합계, 총 라운드 수, 총 베팅액
+`admin.html`은 별도 로그인창이 없습니다. `login.html`에서 로그인한 뒤 저장된 토큰
+(`localStorage`의 `hilo_token`)을 그대로 사용하고, 로그인 응답의 `isAdmin` 값에 따라
+자동으로 `admin.html` 또는 `game.html`로 이동합니다. 토큰이 없거나 만료되면 `admin.html`
+접근 시 자동으로 `login.html`로 돌아갑니다.
 
-**게임 (Socket.io, 연결 시 `auth: { token }` 필요, 승인된 계정만 연결 가능)**
-- `hilo:start` `{ betAmount }` → `{ roundId, card, odds, balance }`
-- `hilo:guess` `{ roundId, direction: 'higher'|'lower' }` → `{ result: 'win'|'lose'|'push', drawnCard, multiplier, potentialPayout, nextOdds }`
-- `hilo:cashout` `{ roundId }` → `{ payout, balance }`
+## 4. 사용 흐름
 
-## 5. 게임 로직
+1. 일반 유저 가입 → 승인 대기, 잔액 0
+2. 관리자가 `/admin.html`에서 승인
+3. 승인된 유저 로그인 가능하지만 잔액 0이라 베팅 시 "칩이 부족합니다" 안내
+4. 관리자가 유저 목록에서 검색 후 충전/차감 (금액 입력 + 충전/차감 토글, 또는 빠른 +100/+500/-100/-500 버튼)
+   — **관리자 자신의 계정도 충전 가능**하므로 관리자도 게임을 플레이할 수 있습니다
+5. 유저(관리자 포함)가 `/game.html`에서 플레이: 배팅 → 카드 확인 → 높음/낮음 예측 → 배수 누적 → 캐시아웃
+6. 관리자가 "삭제" 버튼을 누르면 해당 계정이 **완전히 삭제**됩니다 (대기 중인 가입 거부와
+   기존 계정 삭제를 겸함). 관리자 자기 자신은 삭제할 수 없도록 서버에서 막혀 있습니다.
 
-- 카드 값 2~14 (A=14 최고값), 매 드로우 독립적으로 표준 52장 분포에서 확률 계산
-- **동점(Tie)은 push**: 승패 없이 배수 변화 없이 그대로 재도전
-- 배당 = `(1 / 확률) × (1 - 하우스엣지)`, 확률은 동점을 제외한 유효 카드 수 기준
+## 5. API 요약 (카드 랩과 동일한 경로/응답 형식)
+
+- `POST /api/signup` `{ username, password, adminCode? }`
+  → 관리자 코드 일치 시 `{ token, username, isAdmin, balance }`, 아니면 `{ pending: true, message }`
+- `POST /api/login` `{ username, password }` → `{ token, username, isAdmin, balance }`
+- `GET /api/me` (인증 필요) → `{ username, isAdmin, balance }`
+- `GET /api/admin/users` (관리자 전용) → `{ users: [{ username, balance, isAdmin, status, createdAt }] }`
+- `POST /api/admin/approve` `{ username }`
+- `POST /api/admin/reject` `{ username }` → 계정 완전 삭제 (자기 자신은 불가)
+- `POST /api/admin/recharge` `{ username, amount }` → 양수=충전, 음수=차감 (0이 아닌 절대값 1,000,000 이하)
+
+**Socket.io** (연결 시 `auth: { token }`)
+- `hilo:start` `{ betAmount }` → `{ card, multiplier, balance, odds }`
+- `hilo:guess` `{ direction: 'higher'|'lower' }` → `{ result: 'win'|'lose'|'push', drawnCard, multiplier, potentialPayout?, nextOdds? }`
+- `hilo:cashout` → `{ payout, balance }`
+- `balance:update` (서버 → 클라이언트) 관리자가 충전/차감했을 때 실시간으로 잔액 갱신
+
+## 6. 게임 로직
+
+- 카드 값 2~14 (A=14 최고값), 무늬는 실제 기호(♠♥♦♣) + 색상 정보 포함
+- 매 드로우마다 독립적으로 표준 52장 분포에서 확률 계산 (덱 소모 추적 안 함)
+- **동점은 push**: 승패 없이 배수 변화 없이 재도전. 확률 분모는 동점을 제외한 카드 수 기준
   (그래야 높음+낮음 확률 합이 정확히 100%가 되어 배당이 부풀려지지 않음)
-- 하우스엣지 기본 1% (`services/hiloEngine.js`의 `DEFAULT_HOUSE_EDGE`)
-- 극단 카드(2, A)에서 확정승리에 가까울 때 배당이 1 미만으로 떨어지지 않도록 최소 배당 1.01배 보정
-- 잔액 차감/지급/충전/차감은 전부 `findOneAndUpdate` + `$inc` 원자적 처리 (동시 요청에도 안전)
-
-## 6. 자동 테스트
-
-`tests/e2e.test.js`는 User/HiloRound/BalanceLog 모델만 인메모리로 대체하고, 나머지
-(인증, 승인 플로우, 관리자 권한, 게임 로직, 잔액 처리)는 실제 코드 그대로 검증합니다.
-
-```bash
-npm install
-npm test
-```
-
-확인 항목: 회원가입→승인대기→로그인차단, 관리자 승인 후 로그인, 일반 유저의 admin API 접근 차단,
-잔액 0원 상태 베팅 차단, 관리자 충전 후 플레이, 캐시아웃, 관리자 차감(잔액 초과 차감 차단),
-거절 플로우, 통계 조회까지 전부 자동 확인됩니다.
+- 배당 = `(1/확률) × (1 - 하우스엣지 1%)`, 극단 카드에서 배당이 1 밑으로 안 떨어지게 최소 1.01배 보정
 
 ## 7. Render.com 배포
 
-1. GitHub에 프로젝트 push (⚠️ `models/`, `routes/`, `middleware/`, `public/` 폴더가
-   전부 커밋에 포함됐는지 `git ls-files`로 반드시 확인하세요 — 누락되면 배포 시
-   `Cannot find module` 에러가 납니다)
-2. Render 대시보드 → New → Web Service → 저장소 연결
-3. Build Command: `npm install`
-4. Start Command: `npm start`
-5. Environment 탭에 `.env`의 값들(`MONGODB_URI`, `JWT_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`) 등록
-   (`PORT`는 Render가 자동 주입하므로 생략 가능)
-6. MongoDB Atlas Network Access에서 접속 허용 설정
-7. 배포 후 `/admin.html`에서 `.env`에 설정한 관리자 계정으로 로그인해서 운영 시작
-
-배포 후에는 `server.js`의 `cors: { origin: "*" }`를 실제 도메인으로 제한하는 걸 권장합니다.
+1. GitHub에 push (`git ls-files`로 `public/` 폴더 전체가 커밋됐는지 확인)
+2. Render → New → Web Service → 저장소 연결
+3. Build: `npm install` / Start: `npm start`
+4. Environment에 `JWT_SECRET`, `ADMIN_SIGNUP_CODE`, `MONGODB_URI` 등록 (`PORT`는 자동 주입)
+5. MongoDB Atlas Network Access 허용 설정
+6. 배포 후 `/login.html`에서 회원가입 화면의 관리자 코드로 관리자 계정 생성 후 시작
 
 ## 참고
 
-- 관리자 비밀번호를 바꾸고 싶으면 `.env`의 `ADMIN_PASSWORD`를 바꿔도 **이미 생성된 계정에는 반영되지 않습니다**
-  (서버는 계정이 이미 있으면 건드리지 않음). 비밀번호를 바꾸려면 DB에서 직접 수정하거나,
-  별도의 "비밀번호 변경" 기능을 추가해야 합니다 (현재 버전엔 없음).
-- 실제 결제·현금화(입출금, PG 연동)는 포함되어 있지 않습니다. 관리자가 수동으로 충전/차감하는
-  방식입니다.
+- `MONGODB_URI`를 비워두면 로컬 `data/users.json` 파일에 저장됩니다. Render 같은 호스팅은
+  재배포/재시작 시 디스크가 초기화될 수 있으니 실제 운영에는 반드시 MongoDB를 연결하세요.
+- 진행 중인 하이로 라운드는 서버 메모리에만 있어서 서버가 재시작되면 사라집니다 (잔액은 안전).
+- `ADMIN_SIGNUP_CODE`가 노출되면 누구나 관리자가 될 수 있으니 외부에 공유하지 마세요.
