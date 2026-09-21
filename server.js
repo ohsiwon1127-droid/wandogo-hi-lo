@@ -237,6 +237,9 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.get('/api/me', requireAuth, (req, res) => {
+  if (req.user.status !== 'approved') {
+    return res.status(403).json({ error: '관리자 승인 대기 중입니다.', status: req.user.status });
+  }
   res.json({ username: req.user.username, isAdmin: req.user.isAdmin, balance: req.user.balance });
 });
 
