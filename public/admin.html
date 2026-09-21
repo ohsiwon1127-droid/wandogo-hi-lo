@@ -1,249 +1,276 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>하이로 관리자</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>하이로 · 관리자</title>
 <style>
-  :root {
-    --bg: #f5f3ef; --card-bg: #ffffff; --text: #1f1b16; --text-dim: #6b6259;
-    --border: #e4ded4; --accent: #b4472c; --accent-2: #2f6f4f; --gold: #a67c2e;
-    --shadow: 0 8px 24px rgba(30, 20, 10, 0.08); --pending-bg: #fdf3e2; --pending-text: #9a6b12;
-    --approved-bg: #e7f4ec; --approved-text: #2f6f4f; --rejected-bg: #fbeae5; --rejected-text: #b4472c;
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+  :root{
+    --ink:#0e1310; --felt:#153427; --felt-2:#1c4433; --gold:#c9a227; --gold-soft:#e6c65c;
+    --text:#f0ece1; --muted:#8fa89a; --line:rgba(240,236,225,0.12); --red:#c98a90; --green:#8de29c; --blue:#7fa0c7;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #14110d; --card-bg: #1f1a14; --text: #f1ece3; --text-dim: #a89c8c;
-      --border: #332b21; --accent: #e2735a; --accent-2: #57b586; --gold: #d9a83f;
-      --shadow: 0 8px 28px rgba(0,0,0,0.5);
-      --pending-bg: #3a2c10; --pending-text: #e0b25a; --approved-bg: #17281f; --approved-text: #7fd6a4;
-      --rejected-bg: #33201a; --rejected-text: #e2735a;
-    }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background: radial-gradient(1200px 800px at 50% -10%, #16261e 0%, var(--ink) 55%);
+    font-family:'Inter', system-ui, sans-serif; color:var(--text); padding:28px 16px 60px;
   }
-  * { box-sizing: border-box; }
-  html, body { margin:0; padding:0; background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Segoe UI", sans-serif; }
-  body { min-height:100vh; padding: 24px 16px 60px; }
-  .wrap { max-width: 880px; margin: 0 auto; }
+  .wrap{ max-width:800px; margin:0 auto; }
+  header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
+  h1{ font-family:'Fraunces', serif; font-size:22px; margin:0; }
+  .sub{ color:var(--muted); font-size:13px; margin-top:2px; }
+  .nav{ display:flex; gap:14px; align-items:center; }
+  .nav a, .nav button{ color:var(--muted); text-decoration:none; font-size:13px; background:none; border:none; cursor:pointer; font-family:'Inter', sans-serif; }
+  .nav a:hover, .nav button:hover{ color:var(--gold-soft); }
 
-  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
-  header h1 { font-size:20px; margin:0; }
-  header a { font-size:12px; color: var(--text-dim); text-decoration:none; border:1px solid var(--border);
-    padding:6px 10px; border-radius:8px; }
-  header button.linklike { font-size:12px; color: var(--text-dim); background:none; border:1px solid var(--border);
-    padding:6px 10px; border-radius:8px; cursor:pointer; font-family:inherit; }
+  .panel{ background: linear-gradient(180deg, var(--felt-2), var(--felt)); border:1px solid rgba(230,198,92,0.2); border-radius:16px; padding:20px; margin-bottom:18px; }
+  .panel h2{ font-family:'Fraunces', serif; font-size:15px; margin:0 0 14px; color:var(--gold-soft); display:flex; align-items:center; gap:8px; }
+  .badge{ background:rgba(230,198,92,0.18); color:var(--gold-soft); border-radius:999px; padding:1px 9px; font-size:11px; font-weight:700; }
 
-  .panel { background: var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:20px;
-    box-shadow: var(--shadow); margin-bottom:16px; }
+  .pending-row{ display:flex; justify-content:space-between; align-items:center; padding:9px 10px; border-bottom:1px solid var(--line); font-size:13px; }
+  .pending-row:last-child{ border-bottom:none; }
+  .pending-actions{ display:flex; gap:6px; }
+  .approve-btn, .reject-btn{ border:none; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; }
+  .approve-btn{ background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color:#231a04; }
+  .reject-btn{ background:transparent; border:1px solid var(--red); color:var(--red); }
+  .empty-note{ color:var(--muted); font-size:12.5px; }
 
-  input { width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); background: var(--bg);
-    color: var(--text); font-size:15px; font-family:inherit; margin-bottom:10px; }
-  .btn { padding:11px 16px; border-radius:10px; border:none; font-size:14px; font-weight:700; cursor:pointer;
-    font-family:inherit; }
-  .btn-primary { background: var(--accent); color:#fff; width:100%; }
-  .form-msg { font-size:13px; margin-top:8px; text-align:center; color: var(--text-dim); }
-  .form-msg.err { color: var(--accent); }
+  .recharge-form{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:11.5px; color:var(--muted); }
+  .field input, .field select{ padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:rgba(14,19,16,0.4); color:var(--text); font-size:13px; font-family:'Inter', sans-serif; min-width:160px; }
+  .field input:focus, .field select:focus{ outline:none; border-color:var(--gold); }
+  .mode-toggle{ display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .mode-toggle button{ border:none; background:transparent; color:var(--muted); padding:10px 14px; font-size:13px; cursor:pointer; font-weight:600; }
+  .mode-toggle button.active.add{ background:rgba(141,226,156,0.15); color:var(--green); }
+  .mode-toggle button.active.sub{ background:rgba(201,138,144,0.15); color:var(--red); }
+  button.action{ background: linear-gradient(180deg, var(--gold-soft), var(--gold)); border:none; color:#231a04; font-weight:700; font-size:13px; padding:11px 18px; border-radius:8px; cursor:pointer; }
+  button.action:disabled{ opacity:0.5; cursor:not-allowed; }
 
-  .stat-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:16px; }
-  .stat-card { background: var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:14px;
-    box-shadow: var(--shadow); }
-  .stat-card .label { font-size:11px; color: var(--text-dim); }
-  .stat-card .value { font-size:20px; font-weight:800; margin-top:4px; }
+  table{ width:100%; border-collapse:collapse; margin-top:4px; }
+  th, td{ text-align:left; padding:9px 10px; font-size:13px; border-bottom:1px solid var(--line); }
+  th{ color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.03em; }
+  td.balance-cell{ font-family:'Fraunces', serif; font-weight:600; color:var(--gold-soft); font-variant-numeric: tabular-nums; }
+  tr.admin-row td{ color:var(--blue); }
+  .quick-btn{ border:1px solid var(--line); background:transparent; color:var(--text); border-radius:6px; padding:4px 8px; font-size:11px; cursor:pointer; margin-right:3px; }
+  .quick-btn:hover{ border-color:var(--gold); color:var(--gold-soft); }
+  .quick-btn.sub{ color:var(--red); }
+  .quick-btn.sub:hover{ border-color:var(--red); }
+  .status-tag{ font-size:11px; padding:2px 8px; border-radius:999px; }
+  .status-tag.approved{ background:rgba(141,226,156,0.15); color:var(--green); }
+  .status-tag.pending{ background:rgba(230,198,92,0.15); color:var(--gold-soft); }
+  .delete-btn{ border:1px solid var(--red); background:transparent; color:var(--red); border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; }
+  .delete-btn:hover{ background:rgba(201,138,144,0.12); }
 
-  table { width:100%; border-collapse: collapse; font-size:13px; }
-  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
-  th { color: var(--text-dim); font-weight:600; font-size:12px; }
-  .badge { display:inline-block; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:700; }
-  .badge.pending { background: var(--pending-bg); color: var(--pending-text); }
-  .badge.approved { background: var(--approved-bg); color: var(--approved-text); }
-  .badge.rejected { background: var(--rejected-bg); color: var(--rejected-text); }
-  .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
-  .row-actions button { padding:6px 10px; font-size:12px; border-radius:7px; border:1px solid var(--border);
-    background: var(--bg); color: var(--text); cursor:pointer; font-family:inherit; }
-  .row-actions button.approve { border-color: var(--accent-2); color: var(--accent-2); }
-  .row-actions button.reject { border-color: var(--accent); color: var(--accent); }
-  .balance-form { display:flex; gap:4px; align-items:center; }
-  .balance-form input { width: 90px; margin-bottom:0; padding:6px 8px; font-size:12px; }
-  .balance-form button { padding:6px 8px; font-size:11px; }
+  .msg{ font-size:12.5px; margin-top:10px; min-height:16px; }
+  .msg.ok{ color:var(--green); }
+  .msg.err{ color:var(--red); }
 
-  .empty { text-align:center; padding: 24px; color: var(--text-dim); font-size:13px; }
+  .search{ margin-bottom:12px; }
+  .search input{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:rgba(14,19,16,0.4); color:var(--text); font-size:13px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>🛠️ 하이로 관리자</h1>
     <div>
-      <a href="/">플레이어 화면</a>
-      <button class="linklike" id="logoutBtn" onclick="logout()" style="display:none;">로그아웃</button>
+      <h1>관리자 패널</h1>
+      <div class="sub">가입 승인 · 칩 충전/차감</div>
+    </div>
+    <div class="nav">
+      <a href="game.html">게임 화면으로</a>
+      <button id="logout-btn">로그아웃</button>
     </div>
   </header>
 
-  <div class="panel" id="loginPanel">
-    <input id="adminUsername" placeholder="관리자 아이디" />
-    <input id="adminPassword" type="password" placeholder="비밀번호" />
-    <button class="btn btn-primary" onclick="adminLogin()">로그인</button>
-    <div class="form-msg" id="loginMsg"></div>
+  <div class="panel">
+    <h2>가입 승인 대기 <span class="badge" id="pending-count">0</span></h2>
+    <div id="pending-list"><div class="empty-note">대기 중인 가입 신청이 없습니다.</div></div>
   </div>
 
-  <div id="dashboard" style="display:none;">
-    <div class="stat-grid" id="statGrid"></div>
-
-    <div class="panel">
-      <table>
-        <thead>
-          <tr>
-            <th>아이디</th>
-            <th>상태</th>
-            <th>잔액</th>
-            <th>가입일</th>
-            <th>승인/거절</th>
-            <th>잔액 조정</th>
-          </tr>
-        </thead>
-        <tbody id="userRows"></tbody>
-      </table>
-      <div class="empty" id="emptyMsg" style="display:none;">등록된 유저가 없습니다.</div>
+  <div class="panel">
+    <h2>칩 충전 / 차감</h2>
+    <div class="recharge-form">
+      <div class="field">
+        <label>아이디</label>
+        <input id="rc-username" list="user-list" placeholder="유저 아이디">
+        <datalist id="user-list"></datalist>
+      </div>
+      <div class="field">
+        <label>금액</label>
+        <input id="rc-amount" type="number" min="1" step="1" placeholder="예: 500">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="mode-toggle">
+          <button type="button" class="add active" data-mode="add">충전 +</button>
+          <button type="button" class="sub" data-mode="sub">차감 −</button>
+        </div>
+      </div>
+      <button class="action" id="rc-submit">적용</button>
     </div>
+    <div class="msg" id="rc-msg"></div>
+  </div>
+
+  <div class="panel">
+    <h2>유저 목록</h2>
+    <div class="search">
+      <input id="search-input" placeholder="아이디로 검색...">
+    </div>
+    <table>
+      <thead>
+        <tr><th>아이디</th><th>상태</th><th>보유 칩</th><th>가입일</th><th>빠른 조정</th><th></th></tr>
+      </thead>
+      <tbody id="user-table-body"></tbody>
+    </table>
   </div>
 </div>
 
 <script>
-let token = null;
+(function(){
+  const token = localStorage.getItem('hilo_token');
+  if(!token){ window.location.href = 'login.html'; return; }
 
-async function api(path, method, body) {
-  const res = await fetch(path, {
-    method: method || "GET",
-    headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: "Bearer " + token } : {}),
-    body: body ? JSON.stringify(body) : undefined,
+  const CHIP = '칩';
+  let users = [];
+  let rcMode = 'add';
+
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    localStorage.removeItem('hilo_token');
+    localStorage.removeItem('hilo_username');
+    window.location.href = 'login.html';
   });
-  return { status: res.status, data: await res.json() };
-}
 
-async function adminLogin() {
-  const username = document.getElementById("adminUsername").value.trim();
-  const password = document.getElementById("adminPassword").value;
-  const msgEl = document.getElementById("loginMsg");
-  msgEl.textContent = "";
-
-  const { data } = await api("/api/auth/login", "POST", { username, password });
-  if (!data.ok) { msgEl.textContent = data.error || "로그인 실패"; msgEl.className = "form-msg err"; return; }
-  if (data.user.role !== "admin") { msgEl.textContent = "관리자 계정이 아닙니다."; msgEl.className = "form-msg err"; return; }
-
-  token = data.token;
-  try { localStorage.setItem("hilo_admin_token", token); } catch (e) {}
-  showDashboard();
-}
-
-function logout() {
-  token = null;
-  try { localStorage.removeItem("hilo_admin_token"); } catch (e) {}
-  document.getElementById("loginPanel").style.display = "";
-  document.getElementById("dashboard").style.display = "none";
-  document.getElementById("logoutBtn").style.display = "none";
-}
-
-async function tryRestore() {
-  let saved = null;
-  try { saved = localStorage.getItem("hilo_admin_token"); } catch (e) {}
-  if (!saved) return;
-  token = saved;
-  const { data } = await api("/api/admin/stats");
-  if (data.ok) showDashboard();
-  else { token = null; try { localStorage.removeItem("hilo_admin_token"); } catch (e) {} }
-}
-
-function showDashboard() {
-  document.getElementById("loginPanel").style.display = "none";
-  document.getElementById("dashboard").style.display = "";
-  document.getElementById("logoutBtn").style.display = "";
-  refresh();
-}
-
-function statusBadge(status) {
-  const label = status === "pending" ? "대기중" : status === "approved" ? "승인됨" : "거절됨";
-  return '<span class="badge ' + status + '">' + label + '</span>';
-}
-
-async function refresh() {
-  const [{ data: statsData }, { data: usersData }] = await Promise.all([
-    api("/api/admin/stats"),
-    api("/api/admin/users"),
-  ]);
-
-  if (statsData.ok) {
-    const s = statsData.stats;
-    document.getElementById("statGrid").innerHTML = [
-      ["전체 유저", s.totalUsers],
-      ["승인 대기", s.pendingUsers],
-      ["승인됨", s.approvedUsers],
-      ["전체 보유 잔액", s.totalBalance.toLocaleString()],
-      ["총 라운드 수", s.totalRounds],
-      ["총 베팅액", s.totalWagered.toLocaleString()],
-    ].map(([label, value]) =>
-      '<div class="stat-card"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>'
-    ).join("");
+  async function authedFetch(url, options = {}){
+    const headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + token });
+    if(options.body) headers['Content-Type'] = 'application/json';
+    return fetch(url, Object.assign({}, options, { headers }));
   }
 
-  if (usersData.ok) renderUsers(usersData.users);
-}
+  function fmtDate(ts){ return new Date(ts).toLocaleDateString('ko-KR'); }
+  function fmtChip(n){ return n.toLocaleString('en-US') + CHIP; }
 
-function renderUsers(users) {
-  const tbody = document.getElementById("userRows");
-  document.getElementById("emptyMsg").style.display = users.length ? "none" : "";
+  document.querySelectorAll('.mode-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      rcMode = btn.dataset.mode;
+      document.querySelectorAll('.mode-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
 
-  tbody.innerHTML = users.map((u) => {
-    const created = new Date(u.createdAt).toLocaleDateString("ko-KR");
-    const actionButtons = u.role === "admin"
-      ? '<span style="color:var(--text-dim); font-size:12px;">관리자 계정</span>'
-      : [
-          u.status !== "approved" ? '<button class="approve" onclick="approveUser(\'' + u._id + '\')">승인</button>' : "",
-          u.status !== "rejected" ? '<button class="reject" onclick="rejectUser(\'' + u._id + '\')">거절</button>' : "",
-        ].join("");
+  function renderPending(){
+    const pending = users.filter(u => u.status === 'pending');
+    document.getElementById('pending-count').textContent = pending.length;
+    const el = document.getElementById('pending-list');
+    if(pending.length === 0){
+      el.innerHTML = '<div class="empty-note">대기 중인 가입 신청이 없습니다.</div>';
+      return;
+    }
+    el.innerHTML = pending.map(u => `
+      <div class="pending-row">
+        <span>${u.username} <span style="color:var(--muted); font-size:11px;">(${fmtDate(u.createdAt)} 신청)</span></span>
+        <div class="pending-actions">
+          <button class="approve-btn" data-user="${u.username}">승인</button>
+          <button class="reject-btn" data-user="${u.username}">거부</button>
+        </div>
+      </div>
+    `).join('');
+    el.querySelectorAll('.approve-btn').forEach(b => b.addEventListener('click', () => approveUser(b.dataset.user)));
+    el.querySelectorAll('.reject-btn').forEach(b => b.addEventListener('click', () => rejectUser(b.dataset.user)));
+  }
 
-    return '<tr>' +
-      '<td>' + escapeHtml(u.username) + (u.role === "admin" ? ' 👑' : '') + '</td>' +
-      '<td>' + statusBadge(u.status) + '</td>' +
-      '<td>' + u.balance.toLocaleString() + '</td>' +
-      '<td>' + created + '</td>' +
-      '<td><div class="row-actions">' + actionButtons + '</div></td>' +
-      '<td>' + (u.role === "admin" ? "-" : balanceFormHtml(u._id)) + '</td>' +
-      '</tr>';
-  }).join("");
-}
+  function renderUsers(filter){
+    const body = document.getElementById('user-table-body');
+    const dataList = document.getElementById('user-list');
+    dataList.innerHTML = users.map(u => `<option value="${u.username}">`).join('');
 
-function balanceFormHtml(userId) {
-  const inputId = "amt_" + userId;
-  return '<div class="balance-form">' +
-    '<input id="' + inputId + '" type="number" placeholder="금액" />' +
-    '<button onclick="adjustBalance(\'' + userId + '\', \'' + inputId + '\', 1)">충전</button>' +
-    '<button onclick="adjustBalance(\'' + userId + '\', \'' + inputId + '\', -1)">차감</button>' +
-    '</div>';
-}
+    const f = (filter || '').toLowerCase();
+    const filtered = users.filter(u => u.username.toLowerCase().includes(f));
+    body.innerHTML = filtered.map(u => `
+      <tr class="${u.isAdmin ? 'admin-row' : ''}">
+        <td>${u.username}${u.isAdmin ? ' 👑' : ''}</td>
+        <td><span class="status-tag ${u.status}">${u.status === 'approved' ? '승인됨' : '대기중'}</span></td>
+        <td class="balance-cell">${fmtChip(u.balance)}</td>
+        <td>${fmtDate(u.createdAt)}</td>
+        <td>
+          <button class="quick-btn" data-user="${u.username}" data-amt="100">+100</button>
+          <button class="quick-btn" data-user="${u.username}" data-amt="500">+500</button>
+          <button class="quick-btn sub" data-user="${u.username}" data-amt="-100">-100</button>
+          <button class="quick-btn sub" data-user="${u.username}" data-amt="-500">-500</button>
+        </td>
+        <td><button class="delete-btn" data-user="${u.username}">삭제</button></td>
+      </tr>
+    `).join('');
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
+    body.querySelectorAll('.quick-btn').forEach(btn => {
+      btn.addEventListener('click', () => doRecharge(btn.dataset.user, parseInt(btn.dataset.amt, 10)));
+    });
+    body.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => deleteUser(btn.dataset.user));
+    });
+  }
 
-async function approveUser(id) {
-  await api("/api/admin/users/" + id + "/approve", "POST");
-  refresh();
-}
-async function rejectUser(id) {
-  if (!confirm("정말 거절하시겠습니까?")) return;
-  await api("/api/admin/users/" + id + "/reject", "POST");
-  refresh();
-}
-async function adjustBalance(userId, inputId, sign) {
-  const raw = Number(document.getElementById(inputId).value);
-  if (!Number.isFinite(raw) || raw <= 0) { alert("올바른 금액을 입력하세요."); return; }
-  const amount = raw * sign;
-  const { data } = await api("/api/admin/users/" + userId + "/balance", "POST", { amount });
-  if (!data.ok) { alert(data.error || "처리 실패"); return; }
-  refresh();
-}
+  async function deleteUser(username){
+    if(!confirm(`${username} 계정을 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    await authedFetch('/api/admin/reject', { method:'POST', body: JSON.stringify({ username }) });
+    loadUsers();
+  }
 
-tryRestore();
+  async function loadUsers(){
+    const r = await authedFetch('/api/admin/users');
+    if(!r.ok){
+      if(r.status === 403){ alert('관리자 권한이 없습니다.'); window.location.href = 'game.html'; return; }
+      if(r.status === 401){ localStorage.removeItem('hilo_token'); window.location.href = 'login.html'; return; }
+      document.getElementById('rc-msg').textContent = `유저 목록을 불러오지 못했습니다 (상태 코드 ${r.status})`;
+      document.getElementById('rc-msg').className = 'msg err';
+      return;
+    }
+    const data = await r.json();
+    users = data.users;
+    renderPending();
+    renderUsers(document.getElementById('search-input').value);
+  }
+
+  async function approveUser(username){
+    await authedFetch('/api/admin/approve', { method:'POST', body: JSON.stringify({ username }) });
+    loadUsers();
+  }
+  async function rejectUser(username){
+    if(!confirm(`${username} 님의 가입 신청을 거부(삭제)할까요?`)) return;
+    await authedFetch('/api/admin/reject', { method:'POST', body: JSON.stringify({ username }) });
+    loadUsers();
+  }
+
+  async function doRecharge(username, amount){
+    const msg = document.getElementById('rc-msg');
+    msg.textContent = ''; msg.className = 'msg';
+    try{
+      const r = await authedFetch('/api/admin/recharge', { method: 'POST', body: JSON.stringify({ username, amount }) });
+      const data = await r.json();
+      if(!r.ok){ msg.textContent = data.error || '처리에 실패했습니다.'; msg.className = 'msg err'; return; }
+      const verb = amount >= 0 ? '충전' : '차감';
+      msg.textContent = `${data.username}님 ${Math.abs(amount).toLocaleString('en-US')}${CHIP} ${verb} 완료 (현재 ${fmtChip(data.balance)})`;
+      msg.className = 'msg ok';
+      loadUsers();
+    }catch(e){
+      msg.textContent = '서버에 연결할 수 없습니다.'; msg.className = 'msg err';
+    }
+  }
+
+  document.getElementById('rc-submit').addEventListener('click', () => {
+    const username = document.getElementById('rc-username').value.trim();
+    let amount = parseInt(document.getElementById('rc-amount').value, 10);
+    if(!username){ document.getElementById('rc-msg').textContent = '아이디를 입력하세요.'; document.getElementById('rc-msg').className = 'msg err'; return; }
+    if(!amount || amount <= 0){ document.getElementById('rc-msg').textContent = '금액을 올바르게 입력하세요.'; document.getElementById('rc-msg').className = 'msg err'; return; }
+    if(rcMode === 'sub') amount = -amount;
+    doRecharge(username, amount);
+    document.getElementById('rc-amount').value = '';
+  });
+
+  document.getElementById('search-input').addEventListener('input', (e) => renderUsers(e.target.value));
+
+  loadUsers();
+  setInterval(loadUsers, 8000);
+})();
 </script>
 </body>
 </html>
