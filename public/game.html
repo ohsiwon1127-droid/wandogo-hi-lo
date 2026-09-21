@@ -3,135 +3,343 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>하이로 · 로그인</title>
+<title>하이로 · 게임</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
   :root{
     --ink:#0e1310; --felt:#153427; --felt-2:#1c4433; --gold:#c9a227; --gold-soft:#e6c65c;
-    --text:#f0ece1; --muted:#8fa89a; --line:rgba(240,236,225,0.12); --red:#c98a90; --green:#8de29c;
+    --paper:#f7f2e7; --text:#f0ece1; --muted:#8fa89a; --red:#a3323d; --black:#1c211e;
+    --line: rgba(240,236,225,0.12); --blue:#7fa0c7; --green:#8de29c;
   }
   *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
   body{
-    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
     background: radial-gradient(1200px 800px at 50% -10%, #16261e 0%, var(--ink) 55%);
-    font-family:'Inter', system-ui, sans-serif; color:var(--text); padding:20px;
+    color:var(--text); font-family:'Inter', system-ui, sans-serif; min-height:100vh; padding:28px 16px 60px;
   }
-  .card{
-    width:100%; max-width:380px; background: linear-gradient(180deg, var(--felt-2), var(--felt));
-    border:1px solid rgba(230,198,92,0.2); border-radius:18px; padding:30px 26px;
+  .wrap{ max-width:640px; margin:0 auto; }
+  header{ display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:14px; gap:16px; flex-wrap:wrap; }
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand .mark{ font-family:'Fraunces', serif; font-weight:600; font-size:26px; }
+  .brand .sub{ color:var(--muted); font-size:13px; }
+  .who{ display:flex; align-items:center; gap:14px; }
+  .who .name{ font-size:13px; color:var(--muted); }
+  .who .name b{ color:var(--gold-soft); }
+  .who a, .who button.link{ font-size:12px; color:var(--muted); text-decoration:none; border:none; background:none; cursor:pointer; padding:0; font-family:'Inter', sans-serif; }
+  .who a:hover, .who button.link:hover{ color:var(--gold-soft); }
+  .balance{ text-align:right; position:relative; }
+  .balance .amt{ font-family:'Fraunces', serif; font-size:26px; font-weight:600; color:var(--gold-soft); font-variant-numeric: tabular-nums; transition: text-shadow 0.2s, color 0.2s; }
+  .balance .amt.balance-up{ color:#a8f0b8; text-shadow: 0 0 14px rgba(168,240,184,0.7); }
+  .balance .amt.balance-down{ color:#e08a92; text-shadow: 0 0 14px rgba(224,138,146,0.5); }
+  .balance .lbl{ color:var(--muted); font-size:11px; }
+  .float-gain{ position:absolute; right:0; top:-4px; font-family:'Fraunces', serif; font-weight:700; font-size:14px; color:#8de29c; pointer-events:none; animation: floatUp 1.15s ease forwards; }
+  .float-gain.neg{ color:#e08a92; }
+  @keyframes floatUp{ 0%{ opacity:0; transform:translateY(4px) scale(0.9); } 15%{ opacity:1; transform:translateY(0) scale(1.05); } 100%{ opacity:0; transform:translateY(-30px) scale(1); } }
+
+  .table{ background: linear-gradient(180deg, var(--felt-2), var(--felt)); border:1px solid rgba(230,198,92,0.18); border-radius:18px; padding:28px 20px 22px; position:relative; overflow:hidden; }
+  .table::before{ content:""; position:absolute; inset:8px; border:1px solid rgba(230,198,92,0.14); border-radius:12px; pointer-events:none; }
+
+  .card-zone{ display:flex; flex-direction:column; align-items:center; gap:14px; margin-bottom:18px; }
+  .card{ width:100px; height:142px; border-radius:10px; background:var(--paper); display:flex; flex-direction:column; justify-content:space-between; padding:10px 12px; box-shadow:0 8px 20px rgba(0,0,0,0.4); font-family:'Fraunces', serif; font-weight:600; opacity:0; transform:translateY(-14px) scale(0.92); animation: deal 0.45s ease forwards; }
+  .card.red{ color:var(--red); } .card.black{ color:var(--black); }
+  .card .rank{ font-size:22px; line-height:1; }
+  .card .suit{ font-size:34px; align-self:center; }
+  .card .rank.bottom{ align-self:flex-end; transform:rotate(180deg); }
+  .card.placeholder{ background: repeating-linear-gradient(45deg, var(--felt) 0px, var(--felt) 8px, #10281d 8px, #10281d 16px); box-shadow:none; animation:none; opacity:1; transform:none; display:flex; align-items:center; justify-content:center; }
+  .card.placeholder span{ color:rgba(240,236,225,0.45); font-family:'Inter', sans-serif; font-size:11.5px; text-align:center; line-height:1.5; }
+  @keyframes deal{ to{ opacity:1; transform:translateY(0) scale(1); } }
+
+  .odds-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; }
+  .odds-btn{ border:1px solid var(--line); background: rgba(240,236,225,0.05); color:var(--text); border-radius:12px; padding:12px 8px; text-align:center; cursor:pointer; font-family:'Inter', sans-serif; transition: border-color 0.15s, background 0.15s; }
+  .odds-btn:hover:not(:disabled){ border-color:rgba(230,198,92,0.5); background:rgba(230,198,92,0.08); }
+  .odds-btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .odds-btn .dir{ font-family:'Fraunces', serif; font-size:15px; font-weight:600; margin-bottom:3px; }
+  .odds-btn .mult{ font-size:18px; font-weight:800; color:var(--gold-soft); }
+  .odds-btn .sub-line{ font-size:10.5px; color:var(--muted); margin-top:3px; }
+
+  .result-line{ text-align:center; font-family:'Fraunces', serif; font-size:14px; color:var(--gold-soft); min-height:20px; margin:14px 0 2px; }
+  .result-line.win{ color:#8de29c; } .result-line.lose{ color:#e08a92; }
+
+  .betting{ margin-top:18px; display:flex; flex-direction:column; gap:12px; }
+  .stake-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .chip{ border:1px solid var(--line); background:rgba(240,236,225,0.04); color:var(--text); border-radius:999px; padding:7px 13px; cursor:pointer; font-size:12.5px; font-weight:600; }
+  .chip:hover{ border-color:rgba(230,198,92,0.5); }
+  .chip:disabled{ opacity:0.4; cursor:not-allowed; }
+  .stake-display{ margin-left:auto; font-family:'Fraunces', serif; font-size:17px; color:var(--gold-soft); font-variant-numeric: tabular-nums; }
+
+  .actions{ display:flex; gap:10px; margin-top:2px; }
+  .place-btn{ flex:1; background: linear-gradient(180deg, var(--gold-soft), var(--gold)); border:none; color:#231a04; font-weight:700; font-size:14px; padding:13px; border-radius:10px; cursor:pointer; font-family:'Inter', sans-serif; transition: filter 0.15s; }
+  .place-btn:hover:not(:disabled){ filter:brightness(1.05); }
+  .place-btn:disabled{ opacity:0.4; cursor:not-allowed; filter:none; }
+  .cashout-btn{ background: linear-gradient(180deg, #a8dabb, var(--green)); }
+  .low-balance-note{ text-align:center; color:#e08a92; font-size:12px; margin-top:2px; min-height:16px; }
+
+  .history{ margin-top:16px; display:flex; gap:6px; flex-wrap:wrap; }
+  .hist-dot{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#0e1310; }
+  .hist-dot.win{ background:#8de29c; } .hist-dot.lose{ background:#e08a92; } .hist-dot.push{ background:var(--blue); }
+
+  .note{ margin-top:16px; color:var(--muted); font-size:11.5px; line-height:1.7; }
+  .note b{ color:var(--text); }
+
+  .blocked{
+    max-width:420px; margin:80px auto; text-align:center; background: linear-gradient(180deg, var(--felt-2), var(--felt));
+    border:1px solid rgba(230,198,92,0.2); border-radius:16px; padding:30px 24px; display:none;
   }
-  h1{ font-family:'Fraunces', serif; font-size:24px; margin:0 0 4px; text-align:center; }
-  .sub{ color:var(--muted); font-size:13px; text-align:center; margin:0 0 24px; }
-  .tabs{ display:flex; gap:8px; margin-bottom:20px; }
-  .tab{ flex:1; text-align:center; padding:10px; border-radius:10px; cursor:pointer; border:1px solid var(--line); color:var(--muted); font-weight:600; font-size:13px; }
-  .tab.active{ border-color:var(--gold); color:var(--gold-soft); background:rgba(201,162,39,0.1); }
-  label{ font-size:12px; color:var(--muted); display:block; margin:12px 0 6px; }
-  input{ width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--line); background:rgba(14,19,16,0.4); color:var(--text); font-size:14px; font-family:'Inter', sans-serif; }
-  input:focus{ outline:none; border-color:var(--gold); }
-  button.submit{ width:100%; margin-top:20px; background: linear-gradient(180deg, var(--gold-soft), var(--gold)); border:none; color:#231a04; font-weight:700; font-size:14px; padding:13px; border-radius:10px; cursor:pointer; }
-  button.submit:disabled{ opacity:0.5; cursor:not-allowed; }
-  .msg{ min-height:18px; font-size:12.5px; margin-top:12px; text-align:center; color:var(--red); }
-  .msg.ok{ color:var(--green); }
-  .hint{ color:var(--muted); font-size:11.5px; margin-top:16px; line-height:1.6; text-align:center; }
-  .panel{ display:none; }
-  .panel.active{ display:block; }
+  .blocked h2{ font-family:'Fraunces', serif; margin:0 0 8px; }
+  .blocked p{ color:var(--muted); font-size:13px; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <h1>하이로</h1>
-    <p class="sub">카드 예측 하이로 게임 (가상 칩 전용)</p>
+<div class="wrap" id="app-wrap">
+  <header>
+    <div class="brand">
+      <div class="mark">하이로</div>
+      <div class="sub">카드 예측 게임 · 가상 칩 전용</div>
+    </div>
+    <div class="who">
+      <div class="name">플레이어: <b id="my-name">-</b> · <a href="admin.html" id="admin-link" style="display:none;">관리자</a> · <button class="link" id="logout-btn">로그아웃</button></div>
+      <div class="balance">
+        <div class="lbl">보유 칩</div>
+        <div class="amt" id="balance">0</div>
+        <div id="float-container"></div>
+      </div>
+    </div>
+  </header>
 
-    <div class="tabs">
-      <div class="tab active" data-tab="login">로그인</div>
-      <div class="tab" data-tab="signup">회원가입</div>
+  <div class="table">
+    <div class="card-zone">
+      <div class="card placeholder" id="card-el"><span>시작하면<br/>카드가 나와요</span></div>
+      <div class="odds-row">
+        <button class="odds-btn" id="lower-btn" disabled>
+          <div class="dir">낮음 ↓</div>
+          <div class="mult" id="lower-mult">-</div>
+          <div class="sub-line" id="lower-sub"></div>
+        </button>
+        <button class="odds-btn" id="higher-btn" disabled>
+          <div class="dir">높음 ↑</div>
+          <div class="mult" id="higher-mult">-</div>
+          <div class="sub-line" id="higher-sub"></div>
+        </button>
+      </div>
     </div>
 
-    <div class="panel active" id="panel-login">
-      <label>아이디</label>
-      <input id="login-username" autocomplete="username">
-      <label>비밀번호</label>
-      <input id="login-password" type="password" autocomplete="current-password">
-      <button class="submit" id="login-btn">로그인</button>
+    <div class="result-line" id="result-line"></div>
+
+    <div class="betting">
+      <div class="stake-row">
+        <button class="chip" data-amt="100">100</button>
+        <button class="chip" data-amt="500">500</button>
+        <button class="chip" data-amt="1000">1,000</button>
+        <button class="chip" id="chip-half">½</button>
+        <button class="chip" id="chip-double">2배</button>
+        <div class="stake-display" id="stake-display">100</div>
+      </div>
+      <div class="actions">
+        <button class="place-btn" id="start-btn">시작</button>
+        <button class="place-btn cashout-btn" id="cashout-btn" disabled>캐시아웃</button>
+      </div>
+      <div class="low-balance-note" id="low-balance-note"></div>
     </div>
 
-    <div class="panel" id="panel-signup">
-      <label>아이디 (영문/숫자/밑줄 3~16자, 중복 불가)</label>
-      <input id="signup-username" autocomplete="username">
-      <label>비밀번호 (4자 이상, 본인이 정하는 값)</label>
-      <input id="signup-password" type="password" autocomplete="new-password">
-      <label>관리자 코드 (관리자로 가입할 때만 입력, 일반 유저는 비워두세요)</label>
-      <input id="signup-admincode" autocomplete="off">
-      <button class="submit" id="signup-btn">가입 신청</button>
-      <div class="hint">일반 가입은 <b style="color:var(--text)">관리자 승인 후</b> 로그인할 수 있어요. 지급 칩은 없고, 승인 후 관리자에게 충전을 요청하세요.<br/>관리자 코드를 맞게 입력하면 승인 없이 즉시 관리자로 가입되고, 비밀번호는 위에서 입력한 값 그대로 사용됩니다.</div>
-    </div>
-
-    <div class="msg" id="msg"></div>
+    <div class="history" id="history"></div>
   </div>
 
+  <div class="note">
+    카드 값 2~14(A 최고값) 기준, 매 드로우마다 표준 52장 분포로 독립 계산합니다.<br/>
+    <b>동점은 무효(push)</b> 처리되어 배수 변화 없이 다시 예측하고, 하우스엣지는 1%입니다.
+  </div>
+</div>
+
+<div class="blocked" id="blocked-panel">
+  <h2>접속할 수 없습니다</h2>
+  <p id="blocked-msg">잠시 후 로그인 화면으로 이동합니다...</p>
+</div>
+
 <script>
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-      setMsg('');
+(function(){
+  const token = localStorage.getItem('hilo_token');
+  if(!token){ window.location.href = 'login.html'; return; }
+
+  let balance = 0;
+  let stake = 100;
+  let roundActive = false;
+  let currentCard = null;
+
+  function fmtChip(n){ return n.toLocaleString('en-US') + '칩'; }
+
+  function setBalance(newBalance){
+    const el = document.getElementById('balance');
+    const diff = newBalance - balance;
+    balance = newBalance;
+    el.textContent = fmtChip(balance);
+    if(diff !== 0){
+      el.classList.remove('balance-up', 'balance-down');
+      void el.offsetWidth;
+      el.classList.add(diff > 0 ? 'balance-up' : 'balance-down');
+      spawnFloatGain(diff);
+    }
+  }
+
+  function spawnFloatGain(diff){
+    const container = document.getElementById('float-container');
+    const el = document.createElement('div');
+    el.className = 'float-gain' + (diff < 0 ? ' neg' : '');
+    el.textContent = (diff > 0 ? '+' : '') + diff.toLocaleString('en-US');
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 1200);
+  }
+
+  function renderStake(){
+    document.getElementById('stake-display').textContent = stake.toLocaleString('en-US');
+  }
+  document.querySelectorAll('.chip[data-amt]').forEach(btn => {
+    btn.addEventListener('click', () => { if(!roundActive){ stake = parseInt(btn.dataset.amt, 10); renderStake(); } });
+  });
+  document.getElementById('chip-half').addEventListener('click', () => { if(!roundActive){ stake = Math.max(10, Math.round(stake/2)); renderStake(); } });
+  document.getElementById('chip-double').addEventListener('click', () => { if(!roundActive){ stake = stake*2; renderStake(); } });
+
+  const FACE = { J:1, Q:1, K:1 };
+  function renderCard(card, animate){
+    const el = document.getElementById('card-el');
+    el.className = 'card ' + card.color + (animate ? '' : '');
+    // 재생 애니메이션이 매번 보이도록 노드를 새로 만든다
+    const clone = el.cloneNode(false);
+    clone.className = 'card ' + card.color;
+    clone.innerHTML = `
+      <div class="rank">${card.rank}</div>
+      <div class="suit">${card.suit}</div>
+      <div class="rank bottom">${card.rank}</div>
+    `;
+    el.replaceWith(clone);
+    clone.id = 'card-el';
+  }
+
+  function renderOdds(odds){
+    const fill = (side, key, mEl, subEl, btn) => {
+      if(side.multiplier === null){
+        mEl.textContent = '선택불가'; subEl.textContent = ''; btn.disabled = true; return;
+      }
+      mEl.textContent = side.multiplier.toFixed(2) + 'x';
+      subEl.textContent = '확률 ' + (side.probability*100).toFixed(1) + '%';
+      btn.disabled = !roundActive;
+    };
+    fill(odds.higher, 'higher', document.getElementById('higher-mult'), document.getElementById('higher-sub'), document.getElementById('higher-btn'));
+    fill(odds.lower, 'lower', document.getElementById('lower-mult'), document.getElementById('lower-sub'), document.getElementById('lower-btn'));
+  }
+
+  function setResult(text, cls){
+    const el = document.getElementById('result-line');
+    el.textContent = text;
+    el.className = 'result-line' + (cls ? ' ' + cls : '');
+  }
+
+  function addHistDot(kind, label){
+    const el = document.getElementById('history');
+    const dot = document.createElement('div');
+    dot.className = 'hist-dot ' + kind;
+    dot.textContent = label;
+    el.prepend(dot);
+    while(el.children.length > 20) el.removeChild(el.lastChild);
+  }
+
+  function setUiLocked(locked){
+    roundActive = locked;
+    document.getElementById('start-btn').disabled = locked;
+    document.getElementById('cashout-btn').disabled = !locked;
+    document.querySelectorAll('.chip').forEach(b => b.disabled = locked);
+  }
+
+  // ---------- socket ----------
+  const socket = io({ auth: { token } });
+
+  socket.on('connect_error', (err) => {
+    document.getElementById('app-wrap').style.display = 'none';
+    const panel = document.getElementById('blocked-panel');
+    panel.style.display = 'block';
+    if(err && err.message === '승인 대기 중'){
+      document.getElementById('blocked-msg').textContent = '관리자 승인 대기 중입니다. 승인 후 다시 로그인해주세요.';
+    } else {
+      document.getElementById('blocked-msg').textContent = '로그인이 만료되었습니다. 다시 로그인해주세요.';
+    }
+    localStorage.removeItem('hilo_token');
+    setTimeout(() => { window.location.href = 'login.html'; }, 2500);
+  });
+
+  socket.on('joined', (data) => {
+    document.getElementById('my-name').textContent = data.username;
+    if(data.isAdmin) document.getElementById('admin-link').style.display = 'inline';
+    balance = data.balance;
+    document.getElementById('balance').textContent = fmtChip(balance);
+
+    if(data.round){
+      currentCard = data.round.currentCard;
+      renderCard(currentCard, false);
+      setUiLocked(true);
+      setResult('진행 중인 라운드가 있습니다. 이어서 예측하세요.');
+    }
+  });
+
+  socket.on('balance:update', (data) => setBalance(data.balance));
+
+  document.getElementById('start-btn').addEventListener('click', () => {
+    document.getElementById('low-balance-note').textContent = '';
+    socket.emit('hilo:start', { betAmount: stake }, (res) => {
+      if(!res.ok){ document.getElementById('low-balance-note').textContent = res.error; return; }
+      currentCard = res.card;
+      renderCard(currentCard, true);
+      setUiLocked(true);
+      setBalance(res.balance);
+      renderOdds(res.odds);
+      setResult('카드가 나왔습니다. 높음/낮음을 선택하세요.');
     });
   });
 
-  function setMsg(text, ok){
-    const el = document.getElementById('msg');
-    el.textContent = text;
-    el.className = 'msg' + (ok ? ' ok' : '');
-  }
+  function guess(direction){
+    if(!roundActive) return;
+    socket.emit('hilo:guess', { direction }, (res) => {
+      if(!res.ok){ setResult(res.error, 'lose'); return; }
+      renderCard(res.drawnCard, true);
 
-  function afterAuth(data){
-    localStorage.setItem('hilo_token', data.token);
-    localStorage.setItem('hilo_username', data.username);
-    window.location.href = data.isAdmin ? 'admin.html' : 'game.html';
-  }
-
-  document.getElementById('login-btn').addEventListener('click', async () => {
-    const username = document.getElementById('login-username').value.trim();
-    const password = document.getElementById('login-password').value;
-    if(!username || !password){ setMsg('아이디와 비밀번호를 입력하세요.'); return; }
-    setMsg('');
-    try{
-      const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password }) });
-      const data = await r.json();
-      if(!r.ok){ setMsg(data.error || '로그인에 실패했습니다.'); return; }
-      afterAuth(data);
-    }catch(e){ setMsg('서버에 연결할 수 없습니다.'); }
-  });
-
-  document.getElementById('signup-btn').addEventListener('click', async () => {
-    const username = document.getElementById('signup-username').value.trim();
-    const password = document.getElementById('signup-password').value;
-    const adminCode = document.getElementById('signup-admincode').value.trim();
-    if(!username || !password){ setMsg('아이디와 비밀번호를 입력하세요.'); return; }
-    setMsg('');
-    try{
-      const r = await fetch('/api/signup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password, adminCode }) });
-      const data = await r.json();
-      if(!r.ok){ setMsg(data.error || '회원가입에 실패했습니다.'); return; }
-      if(data.pending){
-        setMsg(data.message, true);
-        document.querySelector('.tab[data-tab="login"]').click();
+      if(res.result === 'push'){
+        currentCard = res.drawnCard;
+        renderOdds(res.nextOdds);
+        setResult('동점! 배수 변화 없이 다시 예측하세요.');
+        addHistDot('push', '=');
         return;
       }
-      afterAuth(data);
-    }catch(e){ setMsg('서버에 연결할 수 없습니다.'); }
+      if(res.result === 'lose'){
+        setUiLocked(false);
+        setResult('실패! 베팅금을 잃었습니다.', 'lose');
+        addHistDot('lose', '✕');
+        return;
+      }
+      currentCard = res.drawnCard;
+      renderOdds(res.nextOdds);
+      setResult(`성공! 배수 ${res.multiplier.toFixed(2)}x · 예상 수령액 ${fmtChip(res.potentialPayout)}`, 'win');
+      addHistDot('win', '✓');
+    });
+  }
+  document.getElementById('higher-btn').addEventListener('click', () => guess('higher'));
+  document.getElementById('lower-btn').addEventListener('click', () => guess('lower'));
+
+  document.getElementById('cashout-btn').addEventListener('click', () => {
+    socket.emit('hilo:cashout', (res) => {
+      if(!res.ok){ setResult(res.error, 'lose'); return; }
+      setBalance(res.balance);
+      setUiLocked(false);
+      setResult(`캐시아웃 완료: +${res.payout.toLocaleString('en-US')}`, 'win');
+    });
   });
 
-  (function(){
-    const token = localStorage.getItem('hilo_token');
-    if(token){
-      fetch('/api/me', { headers:{ Authorization: 'Bearer ' + token }})
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(data => { window.location.href = data.isAdmin ? 'admin.html' : 'game.html'; })
-        .catch(() => { localStorage.removeItem('hilo_token'); });
-    }
-  })();
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    localStorage.removeItem('hilo_token');
+    localStorage.removeItem('hilo_username');
+    window.location.href = 'login.html';
+  });
+
+  renderStake();
+})();
 </script>
 </body>
 </html>
